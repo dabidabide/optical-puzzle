@@ -1,0 +1,518 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>光パズル — WDM/波長割当 (Inc.0)</title>
+<style>
+  :root{
+    --bg:#0d1117; --panel:#161b22; --panel2:#1c2330; --line:#2b3340;
+    --fiber:#3a424f; --text:#e6edf3; --muted:#8b97a6; --ok:#3fb950;
+    --warn:#f85149; --accent:#58a6ff;
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+  html,body{margin:0;padding:0;background:var(--bg);color:var(--text);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Hiragino Sans","Noto Sans JP",sans-serif;}
+  body{max-width:480px;margin:0 auto;padding:10px 12px 40px;}
+  h1{font-size:17px;margin:4px 0 2px;}
+  .sub{font-size:12px;color:var(--muted);margin:0 0 8px;}
+
+  .levelbar{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px;}
+  .levelbar button{flex:1 1 0;min-width:54px;padding:8px 4px;border:1px solid var(--line);
+    background:var(--panel);color:var(--text);border-radius:8px;font-size:13px;}
+  .levelbar button.active{border-color:var(--accent);background:var(--panel2);}
+  .levelbar .star{color:var(--ok);}
+
+  .board{background:var(--panel);border:1px solid var(--line);border-radius:12px;
+    padding:6px;margin-bottom:8px;}
+  svg{display:block;width:100%;height:auto;touch-action:none;}
+  .node-hit{fill:transparent;}
+  .node{fill:#222b38;stroke:#46506080;stroke-width:1.5;}
+  .node.src{stroke:var(--accent);stroke-width:2.5;}
+  .node.dst{stroke:#d2a8ff;stroke-width:2.5;}
+  .node-label{fill:var(--text);font-size:11px;font-weight:600;text-anchor:middle;
+    dominant-baseline:central;pointer-events:none;}
+
+  #msg{min-height:18px;font-size:12px;color:var(--muted);margin:2px 2px 6px;}
+  #clearBanner{display:none;background:#10331d;border:1px solid var(--ok);color:#9be9a8;
+    padding:8px 10px;border-radius:8px;font-size:14px;margin-bottom:8px;text-align:center;}
+  #clearBanner.show{display:block;}
+
+  .section-title{font-size:12px;color:var(--muted);margin:10px 2px 4px;}
+  .demands{display:flex;flex-direction:column;gap:6px;}
+  .chip{display:flex;align-items:center;gap:8px;padding:8px 10px;border:1px solid var(--line);
+    background:var(--panel);border-radius:10px;}
+  .chip.sel{border-color:var(--accent);background:var(--panel2);}
+  .chip .dot{width:16px;height:16px;border-radius:50%;border:1px solid #0006;flex:0 0 auto;}
+  .chip .route{flex:1;font-size:14px;}
+  .chip .stat{font-size:13px;}
+  .chip .stat.ok{color:var(--ok);} .chip .stat.warn{color:var(--warn);} .chip .stat.idle{color:var(--muted);}
+
+  .controls{display:flex;gap:8px;margin-top:8px;align-items:center;flex-wrap:wrap;}
+  .controls button{padding:9px 12px;border:1px solid var(--line);background:var(--panel2);
+    color:var(--text);border-radius:9px;font-size:13px;}
+  .palette{display:flex;gap:8px;margin-top:8px;align-items:center;}
+  .swatch{width:34px;height:34px;border-radius:8px;border:2px solid transparent;}
+  .swatch.sel{border-color:#fff;}
+  .palette .plabel{font-size:12px;color:var(--muted);}
+
+  .meta{display:flex;justify-content:space-between;font-size:12px;color:var(--muted);margin-top:10px;}
+  .hint{font-size:12px;color:var(--muted);background:var(--panel);border:1px dashed var(--line);
+    border-radius:8px;padding:8px 10px;margin-top:12px;line-height:1.5;}
+  .footrow{display:flex;gap:8px;margin-top:10px;}
+  .footrow button{flex:1;padding:10px;border:1px solid var(--line);background:var(--panel);
+    color:var(--text);border-radius:9px;font-size:13px;}
+</style>
+</head>
+<body>
+  <h1>光パズル <span style="color:var(--muted);font-weight:400;font-size:12px;">WDM / 波長割当</span></h1>
+  <p class="sub">同じファイバ(管)に色違いは同居OK。同じ色は同居NG。全依頼を衝突なく繋げばクリア。</p>
+
+  <div class="levelbar" id="levelbar"></div>
+
+  <div id="clearBanner">🎉 クリア！ すべての依頼を衝突なく接続しました</div>
+
+  <div class="board">
+    <svg id="svg" viewBox="0 0 320 240" preserveAspectRatio="xMidYMid meet"></svg>
+  </div>
+  <div id="msg">依頼を選んで、ノードを順にタップして経路を作ろう。</div>
+
+  <div class="section-title">パレット(波長 = 色)</div>
+  <div class="palette" id="palette"></div>
+
+  <div class="section-title">依頼(つなぎたい線)</div>
+  <div class="demands" id="demands"></div>
+
+  <div class="controls">
+    <button id="undoBtn">↩ ひとつ戻る</button>
+    <button id="resetPathBtn">✕ 経路クリア</button>
+  </div>
+
+  <div class="meta">
+    <span id="colorUse">使用色数: 0</span>
+    <span id="parInfo">par: -</span>
+  </div>
+
+  <div class="footrow">
+    <button id="resetLevelBtn">この面を最初から</button>
+  </div>
+
+  <div class="hint">
+    操作: ①下の依頼をタップして選択 → ②盤面のノードを順にタップして経路を作る(隣接ノードのみ) → ③パレットで色を割当。<br>
+    同じファイバを同じ色が2本通ると<span style="color:var(--warn)">赤</span>く衝突表示。色を変えるか経路を変えて解消しよう。
+  </div>
+
+<script>
+"use strict";
+
+/* ===========================================================
+   レベル定義(JSON / セクション6スキーマ準拠)
+   コードと分離して管理。レベル追加はこの配列に足すだけ。
+   ※ 1ファイル運用 & file:// での動作のため埋め込み。
+   =========================================================== */
+const LEVELS = [
+  {
+    id:"L0-01", name:"多重", par:2,
+    palette:["#e6194B","#4363d8"],
+    nodes:[{id:"A",x:60,y:120},{id:"B",x:160,y:120},{id:"C",x:260,y:120}],
+    fibers:[{id:"f1",a:"A",b:"B"},{id:"f2",a:"B",b:"C"}],
+    demands:[{id:"d1",src:"A",dst:"C"},{id:"d2",src:"A",dst:"C"}]
+  },
+  {
+    id:"L0-02", name:"再利用", par:1,
+    palette:["#e6194B","#4363d8"],
+    nodes:[{id:"A",x:50,y:120},{id:"B",x:160,y:55},{id:"C",x:160,y:185},{id:"D",x:270,y:120}],
+    fibers:[{id:"f1",a:"A",b:"B"},{id:"f2",a:"A",b:"C"},{id:"f3",a:"B",b:"D"},
+            {id:"f4",a:"C",b:"D"},{id:"f5",a:"B",b:"C"}],
+    demands:[{id:"d1",src:"A",dst:"D"},{id:"d2",src:"A",dst:"D"}]
+  },
+  {
+    id:"L0-03", name:"分散", par:2,
+    palette:["#e6194B","#4363d8"],
+    nodes:[{id:"L",x:50,y:120},{id:"M1",x:155,y:55},{id:"M2",x:155,y:185},{id:"R",x:265,y:120}],
+    fibers:[{id:"f1",a:"L",b:"M1"},{id:"f2",a:"L",b:"M2"},{id:"f3",a:"M1",b:"R"},
+            {id:"f4",a:"M2",b:"R"},{id:"f5",a:"M1",b:"M2"}],
+    demands:[{id:"d1",src:"L",dst:"R"},{id:"d2",src:"L",dst:"R"},{id:"d3",src:"L",dst:"R"}]
+  },
+  {
+    id:"L0-04", name:"割当", par:2,
+    palette:["#e6194B","#4363d8"],
+    nodes:[{id:"A",x:50,y:50},{id:"B",x:50,y:190},{id:"C",x:160,y:120},
+           {id:"D",x:270,y:50},{id:"E",x:270,y:190}],
+    fibers:[{id:"f1",a:"A",b:"C"},{id:"f2",a:"B",b:"C"},{id:"f3",a:"C",b:"D"},
+            {id:"f4",a:"C",b:"E"},{id:"f5",a:"A",b:"B"},{id:"f6",a:"D",b:"E"}],
+    demands:[{id:"d1",src:"A",dst:"D"},{id:"d2",src:"A",dst:"E"},
+             {id:"d3",src:"B",dst:"D"},{id:"d4",src:"B",dst:"E"}]
+  }
+];
+
+const STORE_KEY = "optipuzzle.inc0.v1";
+
+/* ===========================================================
+   永続化(localStorage)
+   { cleared:{levelId:true}, saved:{levelId:{demandId:{pathNodes,color}}} }
+   =========================================================== */
+function loadStore(){
+  try{ return JSON.parse(localStorage.getItem(STORE_KEY)) || {cleared:{},saved:{}}; }
+  catch(e){ return {cleared:{},saved:{}}; }
+}
+function persist(){ try{ localStorage.setItem(STORE_KEY, JSON.stringify(store)); }catch(e){} }
+
+let store = loadStore();
+if(!store.cleared) store.cleared={};
+if(!store.saved) store.saved={};
+
+/* ===========================================================
+   状態
+   =========================================================== */
+let levelIndex = 0;
+let level = null;
+let solutions = {};      // demandId -> { pathNodes:[...], color: idx|null }
+let selectedDemandId = null;
+
+const SVG_NS = "http://www.w3.org/2000/svg";
+const svg = document.getElementById("svg");
+
+/* ---- 補助 ---- */
+function nodeById(id){ return level.nodes.find(n=>n.id===id); }
+function fiberBetween(a,b){
+  return level.fibers.find(f=>(f.a===a&&f.b===b)||(f.a===b&&f.b===a)) || null;
+}
+function adjacent(a,b){ return !!fiberBetween(a,b); }
+
+function pathFibers(nodes){
+  const out=[];
+  for(let i=0;i<nodes.length-1;i++){
+    const f=fiberBetween(nodes[i],nodes[i+1]);
+    if(f) out.push(f.id);
+  }
+  return out;
+}
+
+function demandConnected(d){
+  const s=solutions[d.id];
+  const n=s.pathNodes;
+  if(n.length<2) return false;
+  if(n[0]!==d.src || n[n.length-1]!==d.dst) return false;
+  for(let i=0;i<n.length-1;i++) if(!fiberBetween(n[i],n[i+1])) return false;
+  return true;
+}
+
+/* ファイバ使用状況 & 衝突計算 */
+function analyze(){
+  const fiberUsers = {};          // fid -> [demandId,...](経路に含む全依頼)
+  level.fibers.forEach(f=>fiberUsers[f.id]=[]);
+  level.demands.forEach(d=>{
+    pathFibers(solutions[d.id].pathNodes).forEach(fid=>{
+      if(!fiberUsers[fid].includes(d.id)) fiberUsers[fid].push(d.id);
+    });
+  });
+  const collidedFibers = new Set();
+  const collidedDemands = new Set();
+  level.fibers.forEach(f=>{
+    const seen = {}; // color -> [demandId]
+    fiberUsers[f.id].forEach(did=>{
+      const c = solutions[did].color;
+      if(c===null||c===undefined) return;
+      (seen[c]=seen[c]||[]).push(did);
+    });
+    Object.values(seen).forEach(list=>{
+      if(list.length>=2){
+        collidedFibers.add(f.id);
+        list.forEach(did=>collidedDemands.add(did));
+      }
+    });
+  });
+  return {fiberUsers, collidedFibers, collidedDemands};
+}
+
+function isClear(a){
+  return level.demands.every(d=>
+    demandConnected(d) &&
+    solutions[d.id].color!==null &&
+    !a.collidedDemands.has(d.id)
+  );
+}
+
+function usedColorCount(){
+  const set=new Set();
+  level.demands.forEach(d=>{ if(solutions[d.id].color!==null) set.add(solutions[d.id].color); });
+  return set.size;
+}
+
+/* ===========================================================
+   レベルのロード / リセット
+   =========================================================== */
+function loadLevel(idx){
+  levelIndex = idx;
+  level = JSON.parse(JSON.stringify(LEVELS[idx]));
+  solutions = {};
+  level.demands.forEach(d=>{ solutions[d.id]={pathNodes:[],color:null}; });
+  // 保存済みの解を復元
+  const saved = store.saved[level.id];
+  if(saved){
+    level.demands.forEach(d=>{
+      if(saved[d.id]){
+        solutions[d.id].pathNodes = Array.isArray(saved[d.id].pathNodes)? saved[d.id].pathNodes.slice():[];
+        solutions[d.id].color = (saved[d.id].color===undefined)?null:saved[d.id].color;
+      }
+    });
+  }
+  selectedDemandId = level.demands[0].id;
+  ensureStart(selectedDemandId);
+  setMsg("依頼「"+selectedDemandId+"」を選択中。ノードを順にタップ。");
+  render();
+}
+
+function ensureStart(did){
+  const s=solutions[did];
+  if(s.pathNodes.length===0) s.pathNodes=[level.demands.find(d=>d.id===did).src];
+}
+
+function resetLevel(){
+  delete store.saved[level.id];
+  persist();
+  loadLevel(levelIndex);
+}
+
+/* ===========================================================
+   入力
+   =========================================================== */
+function selectDemand(did){
+  selectedDemandId = did;
+  ensureStart(did);
+  setMsg("依頼「"+did+"」を選択中。ノードを順にタップ / パレットで色を割当。");
+  render();
+}
+
+function onNodeTap(nodeId){
+  if(!selectedDemandId) return;
+  const d = level.demands.find(x=>x.id===selectedDemandId);
+  const s = solutions[selectedDemandId];
+  if(s.pathNodes.length===0) s.pathNodes=[d.src];
+  const path = s.pathNodes;
+  const last = path[path.length-1];
+
+  if(nodeId===last) return; // 末尾の再タップは無視
+
+  // 直前ノードをタップ → 1手戻す
+  if(path.length>=2 && nodeId===path[path.length-2]){
+    path.pop(); afterEdit(); return;
+  }
+  // 既に通過済み(末尾でも直前でもない)→ ループ禁止
+  if(path.includes(nodeId)){ flash("そのノードは既に経路上にあります"); return; }
+  // 隣接していない
+  if(!adjacent(last,nodeId)){ flash("隣り合うノード(ファイバで繋がった先)だけ進めます"); return; }
+
+  path.push(nodeId);
+  afterEdit();
+}
+
+function undo(){
+  const s=solutions[selectedDemandId];
+  if(s.pathNodes.length>1){ s.pathNodes.pop(); afterEdit(); }
+}
+function resetPath(){
+  const d=level.demands.find(x=>x.id===selectedDemandId);
+  solutions[selectedDemandId].pathNodes=[d.src];
+  afterEdit();
+}
+function setColor(ci){
+  solutions[selectedDemandId].color = ci;
+  afterEdit();
+}
+
+function afterEdit(){
+  saveProgress();
+  render();
+}
+
+function saveProgress(){
+  const snap={};
+  level.demands.forEach(d=>{
+    snap[d.id]={pathNodes:solutions[d.id].pathNodes.slice(), color:solutions[d.id].color};
+  });
+  store.saved[level.id]=snap;
+  persist();
+}
+
+/* ===========================================================
+   描画
+   =========================================================== */
+function clearSVG(){ while(svg.firstChild) svg.removeChild(svg.firstChild); }
+function el(tag,attrs){
+  const e=document.createElementNS(SVG_NS,tag);
+  for(const k in attrs) e.setAttribute(k,attrs[k]);
+  return e;
+}
+
+function render(){
+  const a = analyze();
+  clearSVG();
+
+  // 1) ベースのファイバ(灰色の管)
+  level.fibers.forEach(f=>{
+    const pa=nodeById(f.a), pb=nodeById(f.b);
+    svg.appendChild(el("line",{x1:pa.x,y1:pa.y,x2:pb.x,y2:pb.y,
+      stroke:"#3a424f","stroke-width":8,"stroke-linecap":"round"}));
+  });
+
+  // 2) 衝突ファイバの赤いハイライト
+  a.collidedFibers.forEach(fid=>{
+    const f=level.fibers.find(x=>x.id===fid);
+    const pa=nodeById(f.a), pb=nodeById(f.b);
+    svg.appendChild(el("line",{x1:pa.x,y1:pa.y,x2:pb.x,y2:pb.y,
+      stroke:"#f85149","stroke-width":13,"stroke-linecap":"round",opacity:0.35}));
+  });
+
+  // 3) 各依頼の経路(多重を見せるため垂直方向にずらす)
+  const SPACING=6;
+  level.demands.forEach(d=>{
+    const s=solutions[d.id];
+    const nodes=s.pathNodes;
+    if(nodes.length<2) return;
+    const isSel = (d.id===selectedDemandId);
+    const colored = s.color!==null;
+    const stroke = colored ? level.palette[s.color] : "#7d8795";
+    for(let i=0;i<nodes.length-1;i++){
+      const pa=nodeById(nodes[i]), pb=nodeById(nodes[i+1]);
+      const f=fiberBetween(nodes[i],nodes[i+1]);
+      let ox=0, oy=0;
+      if(f){
+        const users=a.fiberUsers[f.id];
+        const k=users.length, idx=users.indexOf(d.id);
+        const off=(idx-(k-1)/2)*SPACING;
+        let dx=pb.x-pa.x, dy=pb.y-pa.y;
+        const len=Math.hypot(dx,dy)||1; dx/=len; dy/=len;
+        ox=-dy*off; oy=dx*off;
+      }
+      const seg=el("line",{x1:pa.x+ox,y1:pa.y+oy,x2:pb.x+ox,y2:pb.y+oy,
+        stroke:stroke,"stroke-width":isSel?5:4,"stroke-linecap":"round",
+        opacity: colored?0.95:0.85});
+      if(!colored) seg.setAttribute("stroke-dasharray","6 5");
+      svg.appendChild(seg);
+    }
+  });
+
+  // 4) ノード
+  const selDemand = level.demands.find(d=>d.id===selectedDemandId);
+  level.nodes.forEach(n=>{
+    let cls="node";
+    if(selDemand){
+      if(n.id===selDemand.src) cls="node src";
+      else if(n.id===selDemand.dst) cls="node dst";
+    }
+    const c=el("circle",{cx:n.x,cy:n.y,r:14,class:cls});
+    svg.appendChild(c);
+    const t=el("text",{x:n.x,y:n.y,class:"node-label"});
+    t.textContent=n.id;
+    svg.appendChild(t);
+    // 当たり判定を広げる透明円
+    const hit=el("circle",{cx:n.x,cy:n.y,r:22,class:"node-hit"});
+    hit.style.cursor="pointer";
+    hit.addEventListener("pointerdown",ev=>{ev.preventDefault(); onNodeTap(n.id);});
+    svg.appendChild(hit);
+  });
+
+  renderPalette(a);
+  renderDemands(a);
+  renderLevelbar();
+
+  // メタ表示
+  document.getElementById("colorUse").textContent="使用色数: "+usedColorCount();
+  document.getElementById("parInfo").textContent="par(目標色数): "+level.par;
+
+  // クリア判定
+  const cleared=isClear(a);
+  const banner=document.getElementById("clearBanner");
+  if(cleared){
+    banner.classList.add("show");
+    let extra = usedColorCount()<=level.par ? " ★par達成！" : "";
+    banner.textContent="🎉 クリア！ すべての依頼を衝突なく接続"+extra;
+    if(!store.cleared[level.id]){ store.cleared[level.id]=true; persist(); }
+  }else{
+    banner.classList.remove("show");
+  }
+}
+
+function renderPalette(a){
+  const wrap=document.getElementById("palette");
+  wrap.innerHTML="";
+  const lbl=document.createElement("span");
+  lbl.className="plabel";
+  lbl.textContent= selectedDemandId? ("→ "+selectedDemandId+" の色:") : "色:";
+  wrap.appendChild(lbl);
+  level.palette.forEach((col,ci)=>{
+    const sw=document.createElement("div");
+    sw.className="swatch"+(selectedDemandId&&solutions[selectedDemandId].color===ci?" sel":"");
+    sw.style.background=col;
+    sw.addEventListener("pointerdown",e=>{e.preventDefault(); setColor(ci);});
+    wrap.appendChild(sw);
+  });
+}
+
+function renderDemands(a){
+  const wrap=document.getElementById("demands");
+  wrap.innerHTML="";
+  level.demands.forEach(d=>{
+    const s=solutions[d.id];
+    const chip=document.createElement("div");
+    chip.className="chip"+(d.id===selectedDemandId?" sel":"");
+    chip.addEventListener("pointerdown",e=>{e.preventDefault(); selectDemand(d.id);});
+
+    const dot=document.createElement("div");
+    dot.className="dot";
+    dot.style.background = s.color!==null? level.palette[s.color] : "#3a424f";
+    chip.appendChild(dot);
+
+    const route=document.createElement("div");
+    route.className="route";
+    route.innerHTML="<b>"+d.id+"</b> &nbsp;"+d.src+" → "+d.dst+
+      "<br><span style='font-size:11px;color:var(--muted)'>"+
+      (s.pathNodes.length>1? s.pathNodes.join(" - ") : "経路 未設定")+"</span>";
+    chip.appendChild(route);
+
+    const stat=document.createElement("div");
+    const connected=demandConnected(d);
+    const collided=a.collidedDemands.has(d.id);
+    if(collided){ stat.className="stat warn"; stat.textContent="⚠ 衝突"; }
+    else if(connected && s.color!==null){ stat.className="stat ok"; stat.textContent="✓ OK"; }
+    else { stat.className="stat idle"; stat.textContent="…未完"; }
+    chip.appendChild(stat);
+
+    wrap.appendChild(chip);
+  });
+}
+
+function renderLevelbar(){
+  const bar=document.getElementById("levelbar");
+  bar.innerHTML="";
+  LEVELS.forEach((lv,i)=>{
+    const b=document.createElement("button");
+    b.className=(i===levelIndex?"active":"");
+    const star=store.cleared[lv.id]?" <span class='star'>★</span>":"";
+    b.innerHTML=(i+1)+"<br><span style='font-size:11px'>"+lv.name+"</span>"+star;
+    b.addEventListener("pointerdown",e=>{e.preventDefault(); loadLevel(i);});
+    bar.appendChild(b);
+  });
+}
+
+/* ---- メッセージ ---- */
+let flashTimer=null;
+function setMsg(t){ document.getElementById("msg").textContent=t; }
+function flash(t){
+  setMsg(t);
+  if(flashTimer) clearTimeout(flashTimer);
+  flashTimer=setTimeout(()=>setMsg("依頼を選んで、ノードを順にタップして経路を作ろう。"),1600);
+}
+
+/* ---- ボタン ---- */
+document.getElementById("undoBtn").addEventListener("pointerdown",e=>{e.preventDefault();undo();});
+document.getElementById("resetPathBtn").addEventListener("pointerdown",e=>{e.preventDefault();resetPath();});
+document.getElementById("resetLevelBtn").addEventListener("pointerdown",e=>{e.preventDefault();resetLevel();});
+
+/* ---- 起動: 最後に遊んだ続き or 1面目 ---- */
+loadLevel(0);
+</script>
+</body>
+</html>
