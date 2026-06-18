@@ -1,0 +1,4 @@
+# 開発用ツール(配布物には含めない)
+_design_solver.py
+_*.py
+__pycache__/
