@@ -45,6 +45,9 @@
     dominant-baseline:central;pointer-events:none;}
   .node-hit{fill:transparent;cursor:pointer;}
   .conv-ring{fill:none;stroke:var(--conv);stroke-width:2;stroke-dasharray:3 3;}
+  .pipe-label{fill:#9aa6b4;font-size:9px;text-anchor:middle;dominant-baseline:central;
+    pointer-events:none;paint-order:stroke;stroke:#0d1117;stroke-width:2.5px;font-weight:600;}
+  .pipe-label.cong{fill:var(--conv);font-weight:800;}
 
   /* 状況ガイド */
   .guide{display:flex;align-items:center;gap:8px;min-height:40px;margin:8px 2px;
@@ -201,8 +204,8 @@
       <h2>上級モードへようこそ ✦</h2>
       <p class="lead">基本ルールはそのまま。さらに4つの仕掛けが加わります。</p>
       <div class="steps">
-        <div class="step"><div class="num g">力</div><div class="tx"><b>とどく力</b><br>線には「とどく力」があり、道が長い・混んでいると消耗します。足りないと<span style="color:var(--warn)">届きません</span>(線のバーで確認)。</div></div>
-        <div class="step"><div class="num g">混</div><div class="tx"><b>混雑</b><br>同じ管をたくさんの線が通ると、その管を通る信号が弱ります。詰めすぎ注意。</div></div>
+        <div class="step"><div class="num g">力</div><div class="tx"><b>とどく力</b><br>線には「とどく力」があり、道が長い・混んでいると消耗します。各<b>管の数字=その管の長さ</b>。線のバーに <b>道のり＋こみ ×はやさ</b> の内訳が出るので、引く前に見積もれます。</div></div>
+        <div class="step"><div class="num g">混</div><div class="tx"><b>混雑</b><br>同じ管をたくさんの線が通ると弱ります。共有された管は<span style="color:var(--conv)">オレンジで太く「×本数」</span>表示。詰めすぎ注意。</div></div>
         <div class="step"><div class="num g">◇</div><div class="tx"><b>色がえ中継点</b><br>オレンジの◇の点を通ると、線の色を<b>途中で変えられます</b>。区間ごとに色をえらべます。</div></div>
         <div class="step"><div class="num g">速</div><div class="tx"><b>はやさ</b><br>速い線(» の数)ほど「とどく力」を多く使う=短い道が必要です。</div></div>
       </div>
@@ -214,10 +217,11 @@
 "use strict";
 
 /* コスト模型(_adv_solver.py と一致させること) */
-const ADV = { SCALE:22, HOP:1, CONG:1, SPEEDF:{1:1, 2:1.25, 3:1.5} };
+const ADV = { SCALE:22, HOP:1, CONG:2, SPEEDF:{1:1, 2:1.25, 3:1.5} };
 
 const PAL2 = ["#e6194B","#4363d8"];
 const PAL3 = ["#e6194B","#4363d8","#f5a623"];
+const PAL4 = ["#e6194B","#4363d8","#f5a623","#3cb44b"];
 
 /* ===========================================================
    ふつう(8面) — Inc.0。挙動は従来どおり。
@@ -255,7 +259,19 @@ const CASUAL = [
     nodes:[{id:"A",x:55,y:50},{id:"B",x:160,y:40},{id:"C",x:265,y:50},{id:"D",x:55,y:190},{id:"E",x:160,y:200},{id:"F",x:265,y:190},{id:"M",x:160,y:120}],
     fibers:[{id:"f1",a:"A",b:"B"},{id:"f2",a:"B",b:"C"},{id:"f3",a:"D",b:"E"},{id:"f4",a:"E",b:"F"},{id:"f5",a:"A",b:"D"},{id:"f6",a:"C",b:"F"},
             {id:"f7",a:"A",b:"M"},{id:"f8",a:"C",b:"M"},{id:"f9",a:"D",b:"M"},{id:"f10",a:"F",b:"M"},{id:"f11",a:"B",b:"M"},{id:"f12",a:"E",b:"M"}],
-    demands:[{id:"d1",src:"A",dst:"F"},{id:"d2",src:"C",dst:"D"},{id:"d3",src:"B",dst:"E"},{id:"d4",src:"A",dst:"C"},{id:"d5",src:"D",dst:"F"},{id:"d6",src:"B",dst:"D"}] }
+    demands:[{id:"d1",src:"A",dst:"F"},{id:"d2",src:"C",dst:"D"},{id:"d3",src:"B",dst:"E"},{id:"d4",src:"A",dst:"C"},{id:"d5",src:"D",dst:"F"},{id:"d6",src:"B",dst:"D"}] },
+  { id:"v9", name:"ひろば", palette:PAL3, par:2,
+    nodes:[{id:"n00",x:55,y:55},{id:"n01",x:175,y:55},{id:"n02",x:295,y:55},{id:"n03",x:415,y:55},{id:"n10",x:55,y:175},{id:"n11",x:175,y:175},{id:"n12",x:295,y:175},{id:"n13",x:415,y:175},{id:"n20",x:55,y:295},{id:"n21",x:175,y:295},{id:"n22",x:295,y:295},{id:"n23",x:415,y:295}],
+    fibers:[{id:"f_n00_n01",a:"n00",b:"n01"},{id:"f_n00_n10",a:"n00",b:"n10"},{id:"f_n01_n02",a:"n01",b:"n02"},{id:"f_n01_n11",a:"n01",b:"n11"},{id:"f_n02_n03",a:"n02",b:"n03"},{id:"f_n02_n12",a:"n02",b:"n12"},{id:"f_n03_n13",a:"n03",b:"n13"},{id:"f_n10_n11",a:"n10",b:"n11"},{id:"f_n10_n20",a:"n10",b:"n20"},{id:"f_n11_n12",a:"n11",b:"n12"},{id:"f_n11_n21",a:"n11",b:"n21"},{id:"f_n12_n13",a:"n12",b:"n13"},{id:"f_n12_n22",a:"n12",b:"n22"},{id:"f_n13_n23",a:"n13",b:"n23"},{id:"f_n20_n21",a:"n20",b:"n21"},{id:"f_n21_n22",a:"n21",b:"n22"},{id:"f_n22_n23",a:"n22",b:"n23"}],
+    demands:[{id:"d1",src:"n00",dst:"n23"},{id:"d2",src:"n20",dst:"n03"},{id:"d3",src:"n03",dst:"n21"},{id:"d4",src:"n10",dst:"n13"},{id:"d5",src:"n01",dst:"n22"},{id:"d6",src:"n20",dst:"n02"},{id:"d7",src:"n00",dst:"n03"}] },
+  { id:"v10", name:"あみだ", palette:PAL3, par:2,
+    nodes:[{id:"n00",x:50,y:50},{id:"n01",x:160,y:50},{id:"n02",x:270,y:50},{id:"n03",x:380,y:50},{id:"n10",x:50,y:145},{id:"n11",x:160,y:145},{id:"n12",x:270,y:145},{id:"n13",x:380,y:145},{id:"n20",x:50,y:240},{id:"n21",x:160,y:240},{id:"n22",x:270,y:240},{id:"n23",x:380,y:240},{id:"n30",x:50,y:335},{id:"n31",x:160,y:335},{id:"n32",x:270,y:335},{id:"n33",x:380,y:335}],
+    fibers:[{id:"f_n00_n01",a:"n00",b:"n01"},{id:"f_n00_n10",a:"n00",b:"n10"},{id:"f_n01_n02",a:"n01",b:"n02"},{id:"f_n01_n11",a:"n01",b:"n11"},{id:"f_n02_n03",a:"n02",b:"n03"},{id:"f_n02_n12",a:"n02",b:"n12"},{id:"f_n03_n13",a:"n03",b:"n13"},{id:"f_n10_n11",a:"n10",b:"n11"},{id:"f_n10_n20",a:"n10",b:"n20"},{id:"f_n11_n12",a:"n11",b:"n12"},{id:"f_n11_n21",a:"n11",b:"n21"},{id:"f_n12_n13",a:"n12",b:"n13"},{id:"f_n12_n22",a:"n12",b:"n22"},{id:"f_n13_n23",a:"n13",b:"n23"},{id:"f_n20_n21",a:"n20",b:"n21"},{id:"f_n20_n30",a:"n20",b:"n30"},{id:"f_n21_n22",a:"n21",b:"n22"},{id:"f_n21_n31",a:"n21",b:"n31"},{id:"f_n22_n23",a:"n22",b:"n23"},{id:"f_n22_n32",a:"n22",b:"n32"},{id:"f_n23_n33",a:"n23",b:"n33"},{id:"f_n30_n31",a:"n30",b:"n31"},{id:"f_n31_n32",a:"n31",b:"n32"},{id:"f_n32_n33",a:"n32",b:"n33"}],
+    demands:[{id:"d1",src:"n00",dst:"n33"},{id:"d2",src:"n30",dst:"n03"},{id:"d3",src:"n00",dst:"n30"},{id:"d4",src:"n03",dst:"n33"},{id:"d5",src:"n10",dst:"n13"},{id:"d6",src:"n20",dst:"n23"},{id:"d7",src:"n01",dst:"n31"},{id:"d8",src:"n02",dst:"n32"}] },
+  { id:"v11", name:"だいめいろ", palette:PAL4, par:3,
+    nodes:[{id:"n00",x:45,y:50},{id:"n01",x:145,y:50},{id:"n02",x:245,y:50},{id:"n03",x:345,y:50},{id:"n04",x:445,y:50},{id:"n10",x:45,y:142},{id:"n11",x:145,y:142},{id:"n12",x:245,y:142},{id:"n13",x:345,y:142},{id:"n14",x:445,y:142},{id:"n20",x:45,y:234},{id:"n21",x:145,y:234},{id:"n22",x:245,y:234},{id:"n23",x:345,y:234},{id:"n24",x:445,y:234},{id:"n30",x:45,y:326},{id:"n31",x:145,y:326},{id:"n32",x:245,y:326},{id:"n33",x:345,y:326},{id:"n34",x:445,y:326}],
+    fibers:[{id:"f_n00_n01",a:"n00",b:"n01"},{id:"f_n00_n10",a:"n00",b:"n10"},{id:"f_n01_n02",a:"n01",b:"n02"},{id:"f_n01_n11",a:"n01",b:"n11"},{id:"f_n02_n03",a:"n02",b:"n03"},{id:"f_n02_n12",a:"n02",b:"n12"},{id:"f_n03_n04",a:"n03",b:"n04"},{id:"f_n03_n13",a:"n03",b:"n13"},{id:"f_n04_n14",a:"n04",b:"n14"},{id:"f_n10_n11",a:"n10",b:"n11"},{id:"f_n10_n20",a:"n10",b:"n20"},{id:"f_n11_n12",a:"n11",b:"n12"},{id:"f_n11_n21",a:"n11",b:"n21"},{id:"f_n12_n13",a:"n12",b:"n13"},{id:"f_n12_n22",a:"n12",b:"n22"},{id:"f_n13_n14",a:"n13",b:"n14"},{id:"f_n13_n23",a:"n13",b:"n23"},{id:"f_n14_n24",a:"n14",b:"n24"},{id:"f_n20_n21",a:"n20",b:"n21"},{id:"f_n20_n30",a:"n20",b:"n30"},{id:"f_n21_n22",a:"n21",b:"n22"},{id:"f_n21_n31",a:"n21",b:"n31"},{id:"f_n22_n23",a:"n22",b:"n23"},{id:"f_n22_n32",a:"n22",b:"n32"},{id:"f_n23_n24",a:"n23",b:"n24"},{id:"f_n23_n33",a:"n23",b:"n33"},{id:"f_n24_n34",a:"n24",b:"n34"},{id:"f_n30_n31",a:"n30",b:"n31"},{id:"f_n31_n32",a:"n31",b:"n32"},{id:"f_n32_n33",a:"n32",b:"n33"},{id:"f_n33_n34",a:"n33",b:"n34"}],
+    demands:[{id:"d1",src:"n00",dst:"n34"},{id:"d2",src:"n30",dst:"n04"},{id:"d3",src:"n00",dst:"n30"},{id:"d4",src:"n04",dst:"n34"},{id:"d5",src:"n10",dst:"n14"},{id:"d6",src:"n20",dst:"n24"},{id:"d7",src:"n02",dst:"n32"},{id:"d8",src:"n00",dst:"n04"},{id:"d9",src:"n30",dst:"n34"},{id:"d10",src:"n01",dst:"n23"}] }
 ];
 
 /* ===========================================================
@@ -282,7 +298,7 @@ const ADVANCED = [
   { id:"a5", name:"そうごう", advanced:true, cong:1, palette:PAL2,
     nodes:[{id:"A",x:45,y:55},{id:"B",x:45,y:185},{id:"M",x:165,y:120},{id:"C",x:285,y:55},{id:"D",x:285,y:185}],
     fibers:[{id:"f1",a:"A",b:"M"},{id:"f2",a:"B",b:"M"},{id:"f3",a:"M",b:"C"},{id:"f4",a:"M",b:"D"},{id:"f5",a:"A",b:"B"},{id:"f6",a:"C",b:"D"}],
-    demands:[{id:"d1",src:"A",dst:"C",speed:1,budget:15},{id:"d2",src:"B",dst:"D",speed:1,budget:15},{id:"d3",src:"A",dst:"D",speed:2,budget:19},{id:"d4",src:"B",dst:"C",speed:1,budget:15}] }
+    demands:[{id:"d1",src:"A",dst:"C",speed:1,budget:17},{id:"d2",src:"B",dst:"D",speed:1,budget:17},{id:"d3",src:"A",dst:"D",speed:2,budget:22},{id:"d4",src:"B",dst:"C",speed:1,budget:17}] }
 ];
 
 const SETS = { casual:CASUAL, advanced:ADVANCED };
@@ -358,21 +374,20 @@ function analyze(){
     fiberUsers[f.id].forEach(did=>{ const c=colorOnPipe(did,f.id); if(c==null) return; (seen[c]=seen[c]||[]).push(did); });
     Object.values(seen).forEach(list=>{ if(list.length>=2){ collidedFibers.add(f.id); list.forEach(d=>collidedDemands.add(d)); } });
   });
-  const cost={};
-  level.demands.forEach(d=>{ cost[d.id]=demandCost(d.id,fiberUsers); });
-  return {fiberUsers,collidedFibers,collidedDemands,cost};
+  const cost={}, parts={};
+  level.demands.forEach(d=>{ const p=costParts(d.id,fiberUsers); parts[d.id]=p; cost[d.id]=p.cost; });
+  return {fiberUsers,collidedFibers,collidedDemands,cost,parts};
 }
 
-function demandCost(did,fiberUsers){
+function costParts(did,fiberUsers){
   const nodes=solutions[did].pathNodes;
-  if(nodes.length<2) return 0;
+  const sp=demandById(did).speed||1, f=ADV.SPEEDF[sp];
+  if(nodes.length<2) return {road:0,congCost:0,f:f,sp:sp,cost:0};
   let base=0; for(let i=0;i<nodes.length-1;i++) base+=pipeLen(nodes[i],nodes[i+1]);
   const hops=Math.max(0,nodes.length-2);
-  let cong=0;
-  if(level.cong) pathFibers(nodes).forEach(fid=> cong += (fiberUsers[fid].length-1));
-  const raw=base + ADV.HOP*hops + ADV.CONG*cong;
-  const sp=demandById(did).speed||1;
-  return Math.ceil(raw*ADV.SPEEDF[sp]);
+  let cong=0; if(level.cong) pathFibers(nodes).forEach(fid=> cong += (fiberUsers[fid].length-1));
+  const road=base + ADV.HOP*hops, congCost=ADV.CONG*cong;
+  return {road:road, congCost:congCost, f:f, sp:sp, cost:Math.ceil((road+congCost)*f)};
 }
 function budgetOf(did){ const b=demandById(did).budget; return (b==null)?Infinity:b; }
 function reachOK(did,a){ return !level.advanced || a.cost[did] <= budgetOf(did); }
@@ -429,8 +444,16 @@ function render(){
   const a=analyze();
   clearSVG();
 
+  // 盤面サイズに合わせて表示領域を自動調整(大きい面ほど広く使う)
+  const xs=level.nodes.map(n=>n.x), ys=level.nodes.map(n=>n.y), pad=34;
+  const minx=Math.min.apply(null,xs), miny=Math.min.apply(null,ys), maxx=Math.max.apply(null,xs), maxy=Math.max.apply(null,ys);
+  svg.setAttribute("viewBox", (minx-pad)+" "+(miny-pad)+" "+(maxx-minx+pad*2)+" "+(maxy-miny+pad*2));
+
   level.fibers.forEach(f=>{ const pa=nodeById(f.a),pb=nodeById(f.b);
     svg.appendChild(el("line",{x1:pa.x,y1:pa.y,x2:pb.x,y2:pb.y,stroke:"#3a424f","stroke-width":9,"stroke-linecap":"round"})); });
+  // 混雑の可視化: 共有されている管をオレンジで太く(本数が多いほど太い)
+  if(level.advanced && level.cong) level.fibers.forEach(f=>{ const k=a.fiberUsers[f.id].length; if(k>=2){ const pa=nodeById(f.a),pb=nodeById(f.b);
+    svg.appendChild(el("line",{x1:pa.x,y1:pa.y,x2:pb.x,y2:pb.y,stroke:"#f5a623","stroke-width":9+(k-1)*6,"stroke-linecap":"round",opacity:.22})); }});
   a.collidedFibers.forEach(fid=>{ const f=level.fibers.find(x=>x.id===fid),pa=nodeById(f.a),pb=nodeById(f.b);
     svg.appendChild(el("line",{x1:pa.x,y1:pa.y,x2:pb.x,y2:pb.y,stroke:"#ff6b63","stroke-width":15,"stroke-linecap":"round",opacity:.35})); });
 
@@ -459,6 +482,14 @@ function render(){
     const t=el("text",{x:n.x,y:n.y,class:"node-label"}); t.textContent=n.id; svg.appendChild(t);
     const hit=el("circle",{cx:n.x,cy:n.y,r:23,class:"node-hit"});
     hit.addEventListener("pointerdown",ev=>{ev.preventDefault(); onNodeTap(n.id);}); svg.appendChild(hit);
+  });
+
+  // 管の長さ(コスト)を表示。混雑している管は「長さ ×本数」をオレンジで。
+  if(level.advanced) level.fibers.forEach(f=>{ const pa=nodeById(f.a),pb=nodeById(f.b);
+    let dx=pb.x-pa.x,dy=pb.y-pa.y; const L=Math.hypot(dx,dy)||1; const ox=-dy/L*9, oy=dx/L*9;
+    const k=a.fiberUsers[f.id].length, busy=(level.cong&&k>=2);
+    const t=el("text",{x:(pa.x+pb.x)/2+ox,y:(pa.y+pb.y)/2+oy,class:"pipe-label"+(busy?" cong":"")});
+    t.textContent=pipeLen(f.a,f.b)+(busy?(" ×"+k):""); svg.appendChild(t);
   });
 
   renderRunStrip(); renderPalette(); renderLines(a); renderLevelbar();
@@ -509,16 +540,18 @@ function renderLines(a){
     dot.style.background=(s.colors[0]!=null)?level.palette[s.colors[0]]:"#3a424f"; chip.appendChild(dot);
     const info=document.createElement("div"); info.className="info";
     const nm=document.createElement("div"); nm.className="nm"; nm.innerHTML="線"+LINE_LABELS[i]+"  "+d.src+" → "+d.dst;
-    if(level.advanced && d.speed) nm.innerHTML+="<span class='badge'>はやさ "+speedMark(d.speed)+"</span>";
+    if(level.advanced && d.speed) nm.innerHTML+="<span class='badge'>はやさ "+speedMark(d.speed)+" ×"+ADV.SPEEDF[d.speed].toFixed(2)+"</span>";
     info.appendChild(nm);
     const sub=document.createElement("div"); sub.className="sub"; sub.textContent=s.pathNodes.length>1?s.pathNodes.join(" - "):"道はまだ"; info.appendChild(sub);
     if(level.advanced){
-      const over=a.cost[d.id]>budgetOf(d.id);
+      const p=a.parts[d.id], bud=budgetOf(d.id), over=p.cost>bud;
       const g=document.createElement("div"); g.className="gauge"+(over?" over":"");
-      const sp=document.createElement("span"); sp.style.width=Math.min(100,Math.round(a.cost[d.id]/budgetOf(d.id)*100))+"%"; g.appendChild(sp);
+      const sp=document.createElement("span"); sp.style.width=Math.min(100,Math.round(p.cost/bud*100))+"%"; g.appendChild(sp);
       info.appendChild(g);
       const gt=document.createElement("div"); gt.className="sub"; gt.style.color=over?"var(--warn)":"var(--muted)";
-      gt.textContent="とどく力 "+a.cost[d.id]+" / "+budgetOf(d.id)+(over?"(届かない)":""); info.appendChild(gt);
+      gt.textContent="とどく力 "+p.cost+" / "+bud+(over?"(届かない)":""); info.appendChild(gt);
+      const br=document.createElement("div"); br.className="sub";
+      br.textContent="= 道のり"+p.road+(level.cong?(" ＋ こみ"+p.congCost):"")+(p.f!==1?(" ×"+p.f):""); info.appendChild(br);
     }
     chip.appendChild(info);
     const stat=document.createElement("div"); const conn=demandConnected(d), coll=a.collidedDemands.has(d.id), reach=reachOK(d.id,a);
