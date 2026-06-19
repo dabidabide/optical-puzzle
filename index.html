@@ -8,7 +8,7 @@
   :root{
     --bg:#0d1117; --panel:#161b22; --panel2:#1c2330; --line:#2b3340;
     --pipe:#3a424f; --text:#e6edf3; --muted:#90a0b3; --ok:#3fb950;
-    --warn:#ff6b63; --accent:#58a6ff; --gold:#f5b301;
+    --warn:#ff6b63; --accent:#58a6ff; --gold:#f5b301; --conv:#f5a623;
   }
   *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
   html,body{margin:0;padding:0;background:var(--bg);color:var(--text);
@@ -21,6 +21,12 @@
     background:var(--panel);color:var(--text);font-size:16px;font-weight:700;}
   .tagline{font-size:12.5px;color:var(--muted);margin:0 0 10px;line-height:1.5;}
 
+  /* モード切替 */
+  .modebar{display:flex;gap:6px;margin-bottom:8px;}
+  .modebar button{flex:1;padding:8px;border:1px solid var(--line);background:var(--panel);
+    color:var(--muted);border-radius:9px;font-size:13px;}
+  .modebar button.on{border-color:var(--accent);background:var(--panel2);color:var(--text);font-weight:700;}
+
   /* レベル選択 */
   .levelbar{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-bottom:10px;}
   .levelbar button{padding:7px 3px;border:1px solid var(--line);background:var(--panel);
@@ -28,7 +34,6 @@
   .levelbar button.active{border-color:var(--accent);background:var(--panel2);}
   .levelbar .lname{display:block;font-size:10.5px;color:var(--muted);margin-top:1px;}
   .levelbar .st{color:var(--gold);}
-  .levelbar .lk{color:#5b6573;}
 
   /* 盤面 */
   .board{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:6px;}
@@ -39,8 +44,9 @@
   .node-label{fill:#cdd6e0;font-size:11px;font-weight:700;text-anchor:middle;
     dominant-baseline:central;pointer-events:none;}
   .node-hit{fill:transparent;cursor:pointer;}
+  .conv-ring{fill:none;stroke:var(--conv);stroke-width:2;stroke-dasharray:3 3;}
 
-  /* 状況ガイド(常に1行) */
+  /* 状況ガイド */
   .guide{display:flex;align-items:center;gap:8px;min-height:40px;margin:8px 2px;
     font-size:14px;line-height:1.4;}
   .guide .ic{flex:0 0 auto;font-size:18px;}
@@ -58,6 +64,15 @@
 
   .lbl{font-size:12px;color:var(--muted);margin:12px 2px 5px;}
 
+  /* 区間えらび(変換点ありのとき) */
+  .runstrip{display:none;gap:6px;flex-wrap:wrap;align-items:center;margin:0 2px 4px;}
+  .runstrip.show{display:flex;}
+  .runstrip .rl{font-size:11px;color:var(--muted);}
+  .runchip{display:flex;align-items:center;gap:5px;padding:5px 8px;border:1px solid var(--line);
+    border-radius:8px;font-size:12px;background:var(--panel);}
+  .runchip.sel{border-color:#fff;}
+  .runchip .rd{width:13px;height:13px;border-radius:50%;border:1px solid #0007;}
+
   /* 色えらび */
   .palette{display:flex;gap:10px;align-items:center;flex-wrap:wrap;}
   .swatch{width:40px;height:40px;border-radius:10px;border:3px solid transparent;}
@@ -69,9 +84,15 @@
     background:var(--panel);border-radius:11px;}
   .chip.sel{border-color:var(--accent);background:var(--panel2);}
   .chip .dot{width:18px;height:18px;border-radius:50%;border:1px solid #0007;flex:0 0 auto;}
+  .chip .dot.multi{border-radius:4px;}
   .chip .info{flex:1;min-width:0;}
   .chip .nm{font-size:14px;font-weight:600;}
-  .chip .pth{font-size:11px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .chip .sub{font-size:11px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .chip .badge{display:inline-block;font-size:10px;padding:1px 5px;border-radius:6px;background:#243040;
+    color:#b9c6d6;margin-left:6px;}
+  .gauge{height:6px;border-radius:3px;background:#243040;overflow:hidden;margin-top:4px;}
+  .gauge > span{display:block;height:100%;background:var(--ok);}
+  .gauge.over > span{background:var(--warn);}
   .chip .stat{font-size:13px;flex:0 0 auto;}
   .chip .stat.ok{color:var(--ok);} .chip .stat.warn{color:var(--warn);} .chip .stat.idle{color:var(--muted);}
 
@@ -84,18 +105,19 @@
   .footrow button{width:100%;padding:10px;border:1px solid var(--line);background:var(--panel);
     color:var(--muted);border-radius:10px;font-size:13px;}
 
-  /* オーバーレイ(チュートリアル/ヘルプ) */
+  /* オーバーレイ */
   .overlay{position:fixed;inset:0;background:#000a;display:none;align-items:center;justify-content:center;
     padding:18px;z-index:50;}
   .overlay.show{display:flex;}
   .card{background:var(--panel);border:1px solid var(--line);border-radius:16px;
-    max-width:380px;width:100%;padding:18px 18px 16px;max-height:90vh;overflow:auto;}
+    max-width:390px;width:100%;padding:18px;max-height:90vh;overflow:auto;}
   .card h2{margin:0 0 4px;font-size:18px;}
   .card .lead{font-size:13px;color:var(--muted);margin:0 0 14px;line-height:1.5;}
   .steps{display:flex;flex-direction:column;gap:11px;margin-bottom:14px;}
   .step{display:flex;gap:11px;align-items:flex-start;}
   .step .num{flex:0 0 auto;width:26px;height:26px;border-radius:50%;background:var(--accent);
     color:#08121f;font-weight:800;font-size:14px;display:flex;align-items:center;justify-content:center;}
+  .step .num.g{background:var(--conv);}
   .step .tx{font-size:13.5px;line-height:1.5;}
   .keyrule{background:#0f2233;border:1px solid #1f3a55;border-radius:10px;padding:10px 12px;
     font-size:13px;line-height:1.55;margin-bottom:16px;}
@@ -110,6 +132,11 @@
     <button class="help-btn" id="helpBtn" aria-label="あそびかた">?</button>
   </div>
   <p class="tagline">点を線でつなぐパズル。<b style="color:var(--text)">同じ管(くだ)でも、色がちがえば一緒に通れる</b>。ぜんぶの線を、ぶつからずにつなげたらクリア。</p>
+
+  <div class="modebar">
+    <button id="modeCasual" class="on">ふつう</button>
+    <button id="modeAdv">上級 ✦</button>
+  </div>
 
   <div class="levelbar" id="levelbar"></div>
 
@@ -128,7 +155,8 @@
     </div>
   </div>
 
-  <div class="lbl">① 色をえらぶ</div>
+  <div class="lbl" id="colorLbl">① 色をえらぶ</div>
+  <div class="runstrip" id="runstrip"></div>
   <div class="palette" id="palette"></div>
 
   <div class="lbl">② つなぐ線(タップでえらぶ)</div>
@@ -148,11 +176,11 @@
     <button id="resetLevelBtn">この面を最初から</button>
   </div>
 
-  <!-- チュートリアル / ヘルプ -->
+  <!-- 基本ヘルプ -->
   <div class="overlay" id="overlay">
     <div class="card">
       <h2 id="cardTitle">あそびかた</h2>
-      <p class="lead">点と点を線でつなぐパズルです。むずかしい用語はありません。</p>
+      <p class="lead">点と点を線でつなぐパズルです。</p>
       <div class="steps">
         <div class="step"><div class="num">1</div><div class="tx"><b>つなぐ線をえらぶ</b><br>下のリストから線をタップ。青い点が出発、紫の点がゴール。</div></div>
         <div class="step"><div class="num">2</div><div class="tx"><b>点を順にタップして道をつくる</b><br>となりの点へ進めます。「ひとつ戻る」でやり直せます。</div></div>
@@ -167,55 +195,62 @@
     </div>
   </div>
 
+  <!-- 上級ヘルプ -->
+  <div class="overlay" id="advOverlay">
+    <div class="card">
+      <h2>上級モードへようこそ ✦</h2>
+      <p class="lead">基本ルールはそのまま。さらに4つの仕掛けが加わります。</p>
+      <div class="steps">
+        <div class="step"><div class="num g">力</div><div class="tx"><b>とどく力</b><br>線には「とどく力」があり、道が長い・混んでいると消耗します。足りないと<span style="color:var(--warn)">届きません</span>(線のバーで確認)。</div></div>
+        <div class="step"><div class="num g">混</div><div class="tx"><b>混雑</b><br>同じ管をたくさんの線が通ると、その管を通る信号が弱ります。詰めすぎ注意。</div></div>
+        <div class="step"><div class="num g">◇</div><div class="tx"><b>色がえ中継点</b><br>オレンジの◇の点を通ると、線の色を<b>途中で変えられます</b>。区間ごとに色をえらべます。</div></div>
+        <div class="step"><div class="num g">速</div><div class="tx"><b>はやさ</b><br>速い線(» の数)ほど「とどく力」を多く使う=短い道が必要です。</div></div>
+      </div>
+      <button class="go" id="advGoBtn">やってみる</button>
+    </div>
+  </div>
+
 <script>
 "use strict";
 
-/* 将来の拡張用フラグ(Inc.1以降をここでON/OFF) */
-const CONFIG = { qualityBudget:false, nonlinear:false, speedTiers:false };
+/* コスト模型(_adv_solver.py と一致させること) */
+const ADV = { SCALE:22, HOP:1, CONG:1, SPEEDF:{1:1, 2:1.25, 3:1.5} };
 
-/* ===========================================================
-   レベル定義(用語を出さない抽象パズル / コードと分離した純データ)
-   ※ ソルバ(_design_solver.py)で各面の可解性・最少色数を検証済み。
-   =========================================================== */
 const PAL2 = ["#e6194B","#4363d8"];
 const PAL3 = ["#e6194B","#4363d8","#f5a623"];
 
-const LEVELS = [
+/* ===========================================================
+   ふつう(8面) — Inc.0。挙動は従来どおり。
+   =========================================================== */
+const CASUAL = [
   { id:"v1", name:"はじめて", palette:PAL2, par:2,
     nodes:[{id:"A",x:60,y:120},{id:"B",x:160,y:120},{id:"C",x:260,y:120}],
     fibers:[{id:"f1",a:"A",b:"B"},{id:"f2",a:"B",b:"C"}],
     demands:[{id:"d1",src:"A",dst:"C"},{id:"d2",src:"A",dst:"C"}] },
-
   { id:"v2", name:"わかれ道", palette:PAL2, par:1,
     nodes:[{id:"A",x:50,y:120},{id:"B",x:160,y:55},{id:"C",x:160,y:185},{id:"D",x:270,y:120}],
     fibers:[{id:"f1",a:"A",b:"B"},{id:"f2",a:"A",b:"C"},{id:"f3",a:"B",b:"D"},{id:"f4",a:"C",b:"D"},{id:"f5",a:"B",b:"C"}],
     demands:[{id:"d1",src:"A",dst:"D"},{id:"d2",src:"A",dst:"D"}] },
-
   { id:"v3", name:"ゆずりあい", palette:PAL2, par:2,
     nodes:[{id:"L",x:50,y:120},{id:"M1",x:155,y:55},{id:"M2",x:155,y:185},{id:"R",x:265,y:120}],
     fibers:[{id:"f1",a:"L",b:"M1"},{id:"f2",a:"L",b:"M2"},{id:"f3",a:"M1",b:"R"},{id:"f4",a:"M2",b:"R"},{id:"f5",a:"M1",b:"M2"}],
     demands:[{id:"d1",src:"L",dst:"R"},{id:"d2",src:"L",dst:"R"},{id:"d3",src:"L",dst:"R"}] },
-
   { id:"v4", name:"すれちがい", palette:PAL2, par:2,
     nodes:[{id:"A",x:50,y:50},{id:"B",x:50,y:190},{id:"C",x:160,y:120},{id:"D",x:270,y:50},{id:"E",x:270,y:190}],
     fibers:[{id:"f1",a:"A",b:"C"},{id:"f2",a:"B",b:"C"},{id:"f3",a:"C",b:"D"},{id:"f4",a:"C",b:"E"},{id:"f5",a:"A",b:"B"},{id:"f6",a:"D",b:"E"}],
     demands:[{id:"d1",src:"A",dst:"D"},{id:"d2",src:"A",dst:"E"},{id:"d3",src:"B",dst:"D"},{id:"d4",src:"B",dst:"E"}] },
-
   { id:"v5", name:"ごばん目", palette:PAL2, par:2,
     nodes:[{id:"A",x:55,y:55},{id:"B",x:160,y:55},{id:"C",x:265,y:55},{id:"D",x:55,y:185},{id:"E",x:160,y:185},{id:"F",x:265,y:185}],
     fibers:[{id:"f1",a:"A",b:"B"},{id:"f2",a:"B",b:"C"},{id:"f3",a:"D",b:"E"},{id:"f4",a:"E",b:"F"},{id:"f5",a:"A",b:"D"},{id:"f6",a:"B",b:"E"},{id:"f7",a:"C",b:"F"}],
     demands:[{id:"d1",src:"A",dst:"F"},{id:"d2",src:"C",dst:"D"},{id:"d3",src:"A",dst:"C"},{id:"d4",src:"D",dst:"F"}] },
-
   { id:"v6", name:"こみあい", palette:PAL2, par:2,
     nodes:[{id:"A",x:55,y:55},{id:"B",x:160,y:55},{id:"C",x:265,y:55},{id:"D",x:55,y:185},{id:"E",x:160,y:185},{id:"F",x:265,y:185}],
     fibers:[{id:"f1",a:"A",b:"B"},{id:"f2",a:"B",b:"C"},{id:"f3",a:"D",b:"E"},{id:"f4",a:"E",b:"F"},{id:"f5",a:"A",b:"D"},{id:"f6",a:"B",b:"E"},{id:"f7",a:"C",b:"F"}],
     demands:[{id:"d1",src:"A",dst:"F"},{id:"d2",src:"C",dst:"D"},{id:"d3",src:"A",dst:"E"},{id:"d4",src:"B",dst:"F"},{id:"d5",src:"A",dst:"C"}] },
-
   { id:"v7", name:"ほそ橋", palette:PAL3, par:3,
     nodes:[{id:"A",x:40,y:60},{id:"B",x:40,y:180},{id:"P",x:120,y:120},{id:"Q",x:210,y:120},{id:"C",x:290,y:60},{id:"D",x:290,y:180}],
     fibers:[{id:"f1",a:"A",b:"P"},{id:"f2",a:"B",b:"P"},{id:"f3",a:"P",b:"Q"},{id:"f4",a:"Q",b:"C"},{id:"f5",a:"Q",b:"D"},{id:"f6",a:"A",b:"B"},{id:"f7",a:"C",b:"D"}],
     demands:[{id:"d1",src:"A",dst:"C"},{id:"d2",src:"A",dst:"D"},{id:"d3",src:"B",dst:"C"},{id:"d4",src:"A",dst:"B"},{id:"d5",src:"C",dst:"D"}] },
-
   { id:"v8", name:"おおづめ", palette:PAL2, par:2,
     nodes:[{id:"A",x:55,y:50},{id:"B",x:160,y:40},{id:"C",x:265,y:50},{id:"D",x:55,y:190},{id:"E",x:160,y:200},{id:"F",x:265,y:190},{id:"M",x:160,y:120}],
     fibers:[{id:"f1",a:"A",b:"B"},{id:"f2",a:"B",b:"C"},{id:"f3",a:"D",b:"E"},{id:"f4",a:"E",b:"F"},{id:"f5",a:"A",b:"D"},{id:"f6",a:"C",b:"F"},
@@ -223,13 +258,38 @@ const LEVELS = [
     demands:[{id:"d1",src:"A",dst:"F"},{id:"d2",src:"C",dst:"D"},{id:"d3",src:"B",dst:"E"},{id:"d4",src:"A",dst:"C"},{id:"d5",src:"D",dst:"F"},{id:"d6",src:"B",dst:"D"}] }
 ];
 
+/* ===========================================================
+   上級(5面) — Inc.1+速さ。advanced:true。全面ソルバ検証済み。
+   budget=とどく力 / speed=はやさ(1-3) / cong=混雑ON(1) / conv=色がえ中継点
+   =========================================================== */
+const ADVANCED = [
+  { id:"a1", name:"とどく力", advanced:true, cong:0, palette:PAL2,
+    nodes:[{id:"S",x:40,y:120},{id:"U",x:160,y:45},{id:"M",x:160,y:120},{id:"D",x:160,y:195},{id:"T",x:280,y:120}],
+    fibers:[{id:"f1",a:"S",b:"U"},{id:"f2",a:"S",b:"M"},{id:"f3",a:"S",b:"D"},{id:"f4",a:"U",b:"T"},{id:"f5",a:"M",b:"T"},{id:"f6",a:"D",b:"T"}],
+    demands:[{id:"d1",src:"S",dst:"T",budget:12},{id:"d2",src:"S",dst:"T",budget:12}] },
+  { id:"a2", name:"こみ道", advanced:true, cong:1, palette:PAL2,
+    nodes:[{id:"A",x:45,y:60},{id:"B",x:45,y:180},{id:"M",x:160,y:120},{id:"C",x:275,y:60},{id:"D",x:275,y:180}],
+    fibers:[{id:"f1",a:"A",b:"M"},{id:"f2",a:"B",b:"M"},{id:"f3",a:"M",b:"C"},{id:"f4",a:"M",b:"D"},{id:"f5",a:"A",b:"C"},{id:"f6",a:"B",b:"D"},{id:"f7",a:"A",b:"B"},{id:"f8",a:"C",b:"D"}],
+    demands:[{id:"d1",src:"A",dst:"D",budget:13},{id:"d2",src:"B",dst:"C",budget:13},{id:"d3",src:"A",dst:"C",budget:11}] },
+  { id:"a3", name:"いろがえ", advanced:true, cong:0, palette:PAL2,
+    nodes:[{id:"P",x:60,y:55},{id:"Q",x:60,y:185},{id:"H",x:175,y:120,conv:true},{id:"R",x:285,y:120}],
+    fibers:[{id:"f1",a:"P",b:"H"},{id:"f2",a:"Q",b:"H"},{id:"f3",a:"H",b:"R"}],
+    demands:[{id:"d1",src:"P",dst:"R",budget:30},{id:"d2",src:"Q",dst:"R",budget:30},{id:"d3",src:"P",dst:"Q",budget:30}] },
+  { id:"a4", name:"はやさ", advanced:true, cong:0, palette:PAL2,
+    nodes:[{id:"S",x:40,y:120},{id:"U",x:160,y:50},{id:"M",x:160,y:120},{id:"D",x:160,y:190},{id:"T",x:280,y:120}],
+    fibers:[{id:"f1",a:"S",b:"U"},{id:"f2",a:"S",b:"M"},{id:"f3",a:"S",b:"D"},{id:"f4",a:"U",b:"T"},{id:"f5",a:"M",b:"T"},{id:"f6",a:"D",b:"T"}],
+    demands:[{id:"d1",src:"S",dst:"T",speed:3,budget:18},{id:"d2",src:"S",dst:"T",speed:1,budget:15},{id:"d3",src:"S",dst:"T",speed:1,budget:15}] },
+  { id:"a5", name:"そうごう", advanced:true, cong:1, palette:PAL2,
+    nodes:[{id:"A",x:45,y:55},{id:"B",x:45,y:185},{id:"M",x:165,y:120},{id:"C",x:285,y:55},{id:"D",x:285,y:185}],
+    fibers:[{id:"f1",a:"A",b:"M"},{id:"f2",a:"B",b:"M"},{id:"f3",a:"M",b:"C"},{id:"f4",a:"M",b:"D"},{id:"f5",a:"A",b:"B"},{id:"f6",a:"C",b:"D"}],
+    demands:[{id:"d1",src:"A",dst:"C",speed:1,budget:15},{id:"d2",src:"B",dst:"D",speed:1,budget:15},{id:"d3",src:"A",dst:"D",speed:2,budget:19},{id:"d4",src:"B",dst:"C",speed:1,budget:15}] }
+];
+
+const SETS = { casual:CASUAL, advanced:ADVANCED };
 const LINE_LABELS = ["①","②","③","④","⑤","⑥","⑦","⑧"];
 const STORE_KEY = "irotsunagi.v1";
 
-/* ===========================================================
-   永続化(localStorage)
-   { cleared:{id:true}, best:{id:colors}, saved:{id:{did:{pathNodes,color}}}, tut:true }
-   =========================================================== */
+/* 永続化 */
 function loadStore(){
   try{ const s=JSON.parse(localStorage.getItem(STORE_KEY))||{}; s.cleared=s.cleared||{};
        s.best=s.best||{}; s.saved=s.saved||{}; return s; }
@@ -238,24 +298,56 @@ function loadStore(){
 function persist(){ try{ localStorage.setItem(STORE_KEY, JSON.stringify(store)); }catch(e){} }
 let store = loadStore();
 
-/* ===========================================================
-   状態
-   =========================================================== */
-let levelIndex = 0, level = null, solutions = {}, selDemandId = null;
+/* 状態 */
+let mode = (store.mode==="advanced") ? "advanced" : "casual";
+let levelIndex = 0, level = null, solutions = {}, selDemandId = null, selRun = 0;
 const SVG_NS = "http://www.w3.org/2000/svg";
 const svg = document.getElementById("svg");
 
 /* 補助 */
+function curSet(){ return SETS[mode]; }
 function demandById(id){ return level.demands.find(d=>d.id===id); }
 function nodeById(id){ return level.nodes.find(n=>n.id===id); }
+function isConv(id){ const n=nodeById(id); return !!(n&&n.conv); }
 function fiberBetween(a,b){ return level.fibers.find(f=>(f.a===a&&f.b===b)||(f.a===b&&f.b===a))||null; }
 function pathFibers(nodes){ const o=[]; for(let i=0;i<nodes.length-1;i++){const f=fiberBetween(nodes[i],nodes[i+1]); if(f)o.push(f.id);} return o; }
+function pipeLen(a,b){ const na=nodeById(a),nb=nodeById(b); return Math.max(1,Math.round(Math.hypot(na.x-nb.x,na.y-nb.y)/ADV.SCALE)); }
+
+/* 区間(変換点で分割) */
+function runsOf(nodes){
+  const runs=[[]];
+  for(let i=0;i<nodes.length-1;i++){
+    const f=fiberBetween(nodes[i],nodes[i+1]); if(f) runs[runs.length-1].push(f.id);
+    if(i<nodes.length-2 && isConv(nodes[i+1])) runs.push([]);
+  }
+  return runs.filter(r=>r.length>0);
+}
+function runCount(did){ return Math.max(1, runsOf(solutions[did].pathNodes).length); }
+function normalizeColors(did){
+  const s=solutions[did], rc=runCount(did);
+  if(!Array.isArray(s.colors)) s.colors=[];
+  if(s.colors.length>rc) s.colors.length=rc;
+  while(s.colors.length<rc) s.colors.push(null);
+}
+function colorOnPipe(did,fid){
+  const runs=runsOf(solutions[did].pathNodes);
+  for(let i=0;i<runs.length;i++) if(runs[i].includes(fid)) return (solutions[did].colors[i]==null?null:solutions[did].colors[i]);
+  return null;
+}
+
 function demandConnected(d){
   const n=solutions[d.id].pathNodes;
   if(n.length<2||n[0]!==d.src||n[n.length-1]!==d.dst) return false;
   for(let i=0;i<n.length-1;i++) if(!fiberBetween(n[i],n[i+1])) return false;
   return true;
 }
+function colorsComplete(d){
+  const runs=runsOf(solutions[d.id].pathNodes);
+  if(runs.length===0) return false;
+  for(let i=0;i<runs.length;i++) if(solutions[d.id].colors[i]==null) return false;
+  return true;
+}
+
 function analyze(){
   const fiberUsers={}; level.fibers.forEach(f=>fiberUsers[f.id]=[]);
   level.demands.forEach(d=>pathFibers(solutions[d.id].pathNodes).forEach(fid=>{
@@ -263,44 +355,60 @@ function analyze(){
   const collidedFibers=new Set(), collidedDemands=new Set();
   level.fibers.forEach(f=>{
     const seen={};
-    fiberUsers[f.id].forEach(did=>{ const c=solutions[did].color; if(c==null) return; (seen[c]=seen[c]||[]).push(did); });
+    fiberUsers[f.id].forEach(did=>{ const c=colorOnPipe(did,f.id); if(c==null) return; (seen[c]=seen[c]||[]).push(did); });
     Object.values(seen).forEach(list=>{ if(list.length>=2){ collidedFibers.add(f.id); list.forEach(d=>collidedDemands.add(d)); } });
   });
-  return {fiberUsers,collidedFibers,collidedDemands};
+  const cost={};
+  level.demands.forEach(d=>{ cost[d.id]=demandCost(d.id,fiberUsers); });
+  return {fiberUsers,collidedFibers,collidedDemands,cost};
 }
-function isClear(a){
-  return level.demands.every(d=> demandConnected(d) && solutions[d.id].color!=null && !a.collidedDemands.has(d.id));
-}
-function usedColorCount(){ const s=new Set(); level.demands.forEach(d=>{ if(solutions[d.id].color!=null) s.add(solutions[d.id].color); }); return s.size; }
 
-/* ===========================================================
-   レベル操作
-   =========================================================== */
+function demandCost(did,fiberUsers){
+  const nodes=solutions[did].pathNodes;
+  if(nodes.length<2) return 0;
+  let base=0; for(let i=0;i<nodes.length-1;i++) base+=pipeLen(nodes[i],nodes[i+1]);
+  const hops=Math.max(0,nodes.length-2);
+  let cong=0;
+  if(level.cong) pathFibers(nodes).forEach(fid=> cong += (fiberUsers[fid].length-1));
+  const raw=base + ADV.HOP*hops + ADV.CONG*cong;
+  const sp=demandById(did).speed||1;
+  return Math.ceil(raw*ADV.SPEEDF[sp]);
+}
+function budgetOf(did){ const b=demandById(did).budget; return (b==null)?Infinity:b; }
+function reachOK(did,a){ return !level.advanced || a.cost[did] <= budgetOf(did); }
+
+function demandDone(d,a){ return demandConnected(d) && colorsComplete(d) && reachOK(d.id,a) && !a.collidedDemands.has(d.id); }
+function isClear(a){ return level.demands.every(d=>demandDone(d,a)); }
+function usedColorCount(){ const s=new Set(); level.demands.forEach(d=>solutions[d.id].colors.forEach(c=>{ if(c!=null) s.add(c); })); return s.size; }
+
+/* レベル操作 */
 function loadLevel(idx){
-  levelIndex=idx; level=JSON.parse(JSON.stringify(LEVELS[idx]));
-  solutions={}; level.demands.forEach(d=>solutions[d.id]={pathNodes:[],color:null});
+  levelIndex=idx; level=JSON.parse(JSON.stringify(curSet()[idx]));
+  solutions={}; level.demands.forEach(d=>solutions[d.id]={pathNodes:[],colors:[]});
   const saved=store.saved[level.id];
   if(saved) level.demands.forEach(d=>{ if(saved[d.id]){
     solutions[d.id].pathNodes=Array.isArray(saved[d.id].pathNodes)?saved[d.id].pathNodes.slice():[];
-    solutions[d.id].color=(saved[d.id].color==null)?null:saved[d.id].color; }});
-  selDemandId=level.demands[0].id; ensureStart(selDemandId);
+    // 旧形式(color単数)→新形式(colors配列)へ移行
+    if(Array.isArray(saved[d.id].colors)) solutions[d.id].colors=saved[d.id].colors.slice();
+    else if(saved[d.id].color!=null) solutions[d.id].colors=[saved[d.id].color];
+  }});
+  selDemandId=level.demands[0].id; selRun=0; ensureStart(selDemandId);
+  level.demands.forEach(d=>normalizeColors(d.id));
   document.getElementById("clearBanner").classList.remove("show");
   render();
 }
-function ensureStart(did){ const s=solutions[did]; if(s.pathNodes.length===0) s.pathNodes=[demandById(did).src]; }
+function ensureStart(did){ const s=solutions[did]; if(s.pathNodes.length===0){ s.pathNodes=[demandById(did).src]; normalizeColors(did);} }
 function resetLevel(){ delete store.saved[level.id]; persist(); loadLevel(levelIndex); }
 function saveProgress(){
-  const snap={}; level.demands.forEach(d=>snap[d.id]={pathNodes:solutions[d.id].pathNodes.slice(),color:solutions[d.id].color});
+  const snap={}; level.demands.forEach(d=>snap[d.id]={pathNodes:solutions[d.id].pathNodes.slice(),colors:solutions[d.id].colors.slice()});
   store.saved[level.id]=snap; persist();
 }
 
-/* ===========================================================
-   入力
-   =========================================================== */
-function selectDemand(did){ selDemandId=did; ensureStart(did); render(); }
+/* 入力 */
+function selectDemand(did){ selDemandId=did; selRun=0; ensureStart(did); render(); }
 function onNodeTap(nodeId){
   const d=demandById(selDemandId), s=solutions[selDemandId];
-  if(s.pathNodes.length===0) s.pathNodes=[d.src];
+  if(s.pathNodes.length===0){ s.pathNodes=[d.src]; }
   const path=s.pathNodes, last=path[path.length-1];
   if(nodeId===last) return;
   if(path.length>=2 && nodeId===path[path.length-2]){ path.pop(); afterEdit(); return; }
@@ -310,12 +418,10 @@ function onNodeTap(nodeId){
 }
 function undo(){ const s=solutions[selDemandId]; if(s.pathNodes.length>1){ s.pathNodes.pop(); afterEdit(); } }
 function resetPath(){ solutions[selDemandId].pathNodes=[demandById(selDemandId).src]; afterEdit(); }
-function setColor(ci){ solutions[selDemandId].color=ci; afterEdit(); }
-function afterEdit(){ saveProgress(); render(); }
+function setColor(ci){ normalizeColors(selDemandId); const rc=runCount(selDemandId); if(selRun>=rc) selRun=rc-1; solutions[selDemandId].colors[selRun]=ci; afterEdit(); }
+function afterEdit(){ normalizeColors(selDemandId); const rc=runCount(selDemandId); if(selRun>=rc) selRun=rc-1; saveProgress(); render(); }
 
-/* ===========================================================
-   描画
-   =========================================================== */
+/* 描画 */
 function clearSVG(){ while(svg.firstChild) svg.removeChild(svg.firstChild); }
 function el(tag,attrs){ const e=document.createElementNS(SVG_NS,tag); for(const k in attrs) e.setAttribute(k,attrs[k]); return e; }
 
@@ -325,14 +431,16 @@ function render(){
 
   level.fibers.forEach(f=>{ const pa=nodeById(f.a),pb=nodeById(f.b);
     svg.appendChild(el("line",{x1:pa.x,y1:pa.y,x2:pb.x,y2:pb.y,stroke:"#3a424f","stroke-width":9,"stroke-linecap":"round"})); });
-
   a.collidedFibers.forEach(fid=>{ const f=level.fibers.find(x=>x.id===fid),pa=nodeById(f.a),pb=nodeById(f.b);
     svg.appendChild(el("line",{x1:pa.x,y1:pa.y,x2:pb.x,y2:pb.y,stroke:"#ff6b63","stroke-width":15,"stroke-linecap":"round",opacity:.35})); });
 
   const SP=6.5;
   level.demands.forEach(d=>{ const s=solutions[d.id],nodes=s.pathNodes; if(nodes.length<2) return;
-    const sel=(d.id===selDemandId), colored=s.color!=null, col=colored?level.palette[s.color]:"#828d9c";
+    const sel=(d.id===selDemandId), runs=runsOf(nodes);
     for(let i=0;i<nodes.length-1;i++){ const pa=nodeById(nodes[i]),pb=nodeById(nodes[i+1]),f=fiberBetween(nodes[i],nodes[i+1]);
+      // この管が属する区間→色
+      let col="#828d9c", colored=false;
+      if(f){ for(let r=0;r<runs.length;r++) if(runs[r].includes(f.id)){ const c=s.colors[r]; if(c!=null){col=level.palette[c];colored=true;} break; } }
       let ox=0,oy=0;
       if(f){ const u=a.fiberUsers[f.id],k=u.length,idx=u.indexOf(d.id),off=(idx-(k-1)/2)*SP;
         let dx=pb.x-pa.x,dy=pb.y-pa.y; const L=Math.hypot(dx,dy)||1; dx/=L; dy/=L; ox=-dy*off; oy=dx*off; }
@@ -343,7 +451,9 @@ function render(){
     }});
 
   const sd=demandById(selDemandId);
-  level.nodes.forEach(n=>{ let cls="node";
+  level.nodes.forEach(n=>{
+    if(n.conv) svg.appendChild(el("circle",{cx:n.x,cy:n.y,r:19,class:"conv-ring"}));
+    let cls="node";
     if(sd){ if(n.id===sd.src) cls="node src"; else if(n.id===sd.dst) cls="node dst"; }
     svg.appendChild(el("circle",{cx:n.x,cy:n.y,r:14,class:cls}));
     const t=el("text",{x:n.x,y:n.y,class:"node-label"}); t.textContent=n.id; svg.appendChild(t);
@@ -351,66 +461,70 @@ function render(){
     hit.addEventListener("pointerdown",ev=>{ev.preventDefault(); onNodeTap(n.id);}); svg.appendChild(hit);
   });
 
-  renderPalette(); renderLines(a); renderLevelbar();
+  renderRunStrip(); renderPalette(); renderLines(a); renderLevelbar();
 
   const used=usedColorCount();
   document.getElementById("colorUse").textContent="つかった色: "+used+" / "+level.palette.length;
-  document.getElementById("parInfo").textContent = level.par<level.palette.length ? ("✦ "+level.par+"色でクリアでボーナス") : "";
+  document.getElementById("parInfo").textContent = (!level.advanced && level.par<level.palette.length) ? ("✦ "+level.par+"色でクリアでボーナス") : "";
 
   updateGuide(a);
 }
 
-function updateGuide(a){
-  const g=document.getElementById("guide"), t=document.getElementById("guideText");
-  g.className="guide"; let ic="👆", msg="";
-  const cleared=isClear(a);
-  if(cleared){ g.className="guide ok"; ic="🎉"; msg="クリア！ つぎの面へ進めるよ"; }
-  else if(a.collidedDemands.size>0){ g.className="guide warn"; ic="⚠️"; msg="同じ色がぶつかってるよ。色か道を変えてみよう"; }
-  else {
-    const d=demandById(selDemandId), s=solutions[selDemandId];
-    const lbl=LINE_LABELS[level.demands.indexOf(d)];
-    if(!demandConnected(d)) msg="線"+lbl+"をえらび中。点をタップして "+d.src+" → "+d.dst+" の道をつくろう";
-    else if(s.color==null) msg="線"+lbl+"の道ができた！ 上の「色」をえらんでね";
-    else { const rest=level.demands.filter(x=>!(demandConnected(x)&&solutions[x.id].color!=null)).length;
-      msg = rest>0 ? "いいね！ 残りの線もつなごう(あと"+rest+"本)" : "あと少し！ ぶつかりを直そう"; }
+function renderRunStrip(){
+  const strip=document.getElementById("runstrip");
+  const rc=runCount(selDemandId);
+  const lbl=document.getElementById("colorLbl");
+  if(rc<=1){ strip.classList.remove("show"); strip.innerHTML=""; lbl.textContent="① 色をえらぶ"; return; }
+  lbl.textContent="① 色をえらぶ(区間ごと)";
+  strip.classList.add("show"); strip.innerHTML="";
+  const rl=document.createElement("span"); rl.className="rl"; rl.textContent="区間:"; strip.appendChild(rl);
+  const cols=solutions[selDemandId].colors;
+  for(let i=0;i<rc;i++){
+    const rc2=document.createElement("div"); rc2.className="runchip"+(i===selRun?" sel":"");
+    const rd=document.createElement("div"); rd.className="rd"; rd.style.background=cols[i]!=null?level.palette[cols[i]]:"#3a424f";
+    rc2.appendChild(rd); const tx=document.createElement("span"); tx.textContent=(i+1); rc2.appendChild(tx);
+    rc2.addEventListener("pointerdown",e=>{e.preventDefault(); selRun=i; render();});
+    strip.appendChild(rc2);
   }
-  g.innerHTML=""; const si=document.createElement("span"); si.className="ic"; si.textContent=ic;
-  const st=document.createElement("span"); st.id="guideText"; st.textContent=msg; g.appendChild(si); g.appendChild(st);
-
-  // クリアバナー
-  const banner=document.getElementById("clearBanner");
-  if(cleared){
-    banner.classList.add("show");
-    const used=usedColorCount();
-    const bonus=used<=level.par;
-    document.getElementById("bonusText").textContent = bonus ? ("✦ ベスト達成！ "+used+"色でクリア") : ("いまは "+used+"色。"+level.par+"色でクリアするとボーナス✦");
-    document.getElementById("nextBtn").style.display = (levelIndex<LEVELS.length-1) ? "" : "none";
-    if(!store.cleared[level.id]) store.cleared[level.id]=true;
-    if(store.best[level.id]==null || used<store.best[level.id]) store.best[level.id]=used;
-    persist();
-  } else banner.classList.remove("show");
 }
 
 function renderPalette(){
   const w=document.getElementById("palette"); w.innerHTML="";
+  normalizeColors(selDemandId); const rc=runCount(selDemandId); if(selRun>=rc) selRun=rc-1;
+  const cur=solutions[selDemandId].colors[selRun];
   level.palette.forEach((c,ci)=>{ const sw=document.createElement("div");
-    sw.className="swatch"+(solutions[selDemandId].color===ci?" sel":""); sw.style.background=c;
+    sw.className="swatch"+(cur===ci?" sel":""); sw.style.background=c;
     sw.addEventListener("pointerdown",e=>{e.preventDefault(); setColor(ci);}); w.appendChild(sw); });
 }
+
+function speedMark(sp){ return sp>=3?"»»»":sp===2?"»»":"»"; }
 
 function renderLines(a){
   const w=document.getElementById("lines"); w.innerHTML="";
   level.demands.forEach((d,i)=>{ const s=solutions[d.id];
     const chip=document.createElement("div"); chip.className="chip"+(d.id===selDemandId?" sel":"");
     chip.addEventListener("pointerdown",e=>{e.preventDefault(); selectDemand(d.id);});
-    const dot=document.createElement("div"); dot.className="dot"; dot.style.background=s.color!=null?level.palette[s.color]:"#3a424f"; chip.appendChild(dot);
+    const rc=runsOf(s.pathNodes).length;
+    const dot=document.createElement("div"); dot.className="dot"+(rc>1?" multi":"");
+    dot.style.background=(s.colors[0]!=null)?level.palette[s.colors[0]]:"#3a424f"; chip.appendChild(dot);
     const info=document.createElement("div"); info.className="info";
-    const nm=document.createElement("div"); nm.className="nm"; nm.textContent="線"+LINE_LABELS[i]+"  "+d.src+" → "+d.dst;
-    const pth=document.createElement("div"); pth.className="pth"; pth.textContent=s.pathNodes.length>1?s.pathNodes.join(" - "):"道はまだ";
-    info.appendChild(nm); info.appendChild(pth); chip.appendChild(info);
-    const stat=document.createElement("div"); const conn=demandConnected(d), coll=a.collidedDemands.has(d.id);
+    const nm=document.createElement("div"); nm.className="nm"; nm.innerHTML="線"+LINE_LABELS[i]+"  "+d.src+" → "+d.dst;
+    if(level.advanced && d.speed) nm.innerHTML+="<span class='badge'>はやさ "+speedMark(d.speed)+"</span>";
+    info.appendChild(nm);
+    const sub=document.createElement("div"); sub.className="sub"; sub.textContent=s.pathNodes.length>1?s.pathNodes.join(" - "):"道はまだ"; info.appendChild(sub);
+    if(level.advanced){
+      const over=a.cost[d.id]>budgetOf(d.id);
+      const g=document.createElement("div"); g.className="gauge"+(over?" over":"");
+      const sp=document.createElement("span"); sp.style.width=Math.min(100,Math.round(a.cost[d.id]/budgetOf(d.id)*100))+"%"; g.appendChild(sp);
+      info.appendChild(g);
+      const gt=document.createElement("div"); gt.className="sub"; gt.style.color=over?"var(--warn)":"var(--muted)";
+      gt.textContent="とどく力 "+a.cost[d.id]+" / "+budgetOf(d.id)+(over?"(届かない)":""); info.appendChild(gt);
+    }
+    chip.appendChild(info);
+    const stat=document.createElement("div"); const conn=demandConnected(d), coll=a.collidedDemands.has(d.id), reach=reachOK(d.id,a);
     if(coll){ stat.className="stat warn"; stat.textContent="⚠ ぶつかり"; }
-    else if(conn&&s.color!=null){ stat.className="stat ok"; stat.textContent="✓ OK"; }
+    else if(conn&&!reach){ stat.className="stat warn"; stat.textContent="⚠ 届かない"; }
+    else if(conn&&colorsComplete(d)){ stat.className="stat ok"; stat.textContent="✓ OK"; }
     else { stat.className="stat idle"; stat.textContent="…とちゅう"; }
     chip.appendChild(stat); w.appendChild(chip);
   });
@@ -418,39 +532,80 @@ function renderLines(a){
 
 function renderLevelbar(){
   const bar=document.getElementById("levelbar"); bar.innerHTML="";
-  LEVELS.forEach((lv,i)=>{ const b=document.createElement("button"); if(i===levelIndex) b.className="active";
+  curSet().forEach((lv,i)=>{ const b=document.createElement("button"); if(i===levelIndex) b.className="active";
     const cleared=store.cleared[lv.id];
-    const bonus=cleared && store.best[lv.id]!=null && store.best[lv.id]<=lv.par;
+    const bonus=cleared && !lv.advanced && lv.par!=null && store.best[lv.id]!=null && store.best[lv.id]<=lv.par;
     const mark = cleared ? ("<span class='st'>★"+(bonus?"✦":"")+"</span>") : "";
     b.innerHTML="<b>"+(i+1)+"</b> "+mark+"<span class='lname'>"+lv.name+"</span>";
     b.addEventListener("pointerdown",e=>{e.preventDefault(); loadLevel(i);}); bar.appendChild(b);
   });
 }
 
-/* ガイドの一時メッセージ */
+function updateGuide(a){
+  const g=document.getElementById("guide"); let ic="👆", msg="";
+  g.className="guide";
+  const cleared=isClear(a);
+  if(cleared){ g.className="guide ok"; ic="🎉"; msg="クリア！ つぎの面へ進めるよ"; }
+  else if(a.collidedDemands.size>0){ g.className="guide warn"; ic="⚠️"; msg="同じ色がぶつかってるよ。色か道を変えてみよう"; }
+  else {
+    const notReach=level.demands.find(d=>demandConnected(d)&&colorsComplete(d)&&!reachOK(d.id,a));
+    if(notReach){ g.className="guide warn"; ic="⚠️"; msg="線"+LINE_LABELS[level.demands.indexOf(notReach)]+"が とどいていない。短い道か、空いている道にしてみよう"; }
+    else {
+      const d=demandById(selDemandId), s=solutions[selDemandId], lbl=LINE_LABELS[level.demands.indexOf(d)];
+      if(!demandConnected(d)) msg="線"+lbl+"をえらび中。点をタップして "+d.src+" → "+d.dst+" の道をつくろう";
+      else if(!colorsComplete(d)) msg=(runCount(d.id)>1)?("線"+lbl+"の道ができた！ 区間ごとに色をえらんでね"):("線"+lbl+"の道ができた！ 上の色をえらんでね");
+      else { const rest=level.demands.filter(x=>!demandDone(x,a)).length; msg = rest>0 ? ("いいね！ 残りの線もつなごう(あと"+rest+"本)") : "あと少し！"; }
+    }
+  }
+  g.innerHTML=""; const si=document.createElement("span"); si.className="ic"; si.textContent=ic;
+  const st=document.createElement("span"); st.id="guideText"; st.textContent=msg; g.appendChild(si); g.appendChild(st);
+
+  const banner=document.getElementById("clearBanner");
+  if(cleared){
+    banner.classList.add("show");
+    const used=usedColorCount();
+    if(level.advanced){ document.getElementById("bonusText").textContent="すべて届いて、ぶつかりなし！"; }
+    else { const bonus=used<=level.par; document.getElementById("bonusText").textContent = bonus?("✦ ベスト達成！ "+used+"色でクリア"):("いまは "+used+"色。"+level.par+"色でクリアするとボーナス✦"); }
+    document.getElementById("nextBtn").style.display=(levelIndex<curSet().length-1)?"":"none";
+    if(!store.cleared[level.id]) store.cleared[level.id]=true;
+    if(store.best[level.id]==null || used<store.best[level.id]) store.best[level.id]=used;
+    persist();
+  } else banner.classList.remove("show");
+}
+
 let flashTimer=null;
 function flash(t){ const st=document.getElementById("guideText"); if(st) st.textContent=t;
   if(flashTimer) clearTimeout(flashTimer); flashTimer=setTimeout(()=>render(),1500); }
 
-/* ===========================================================
-   オーバーレイ
-   =========================================================== */
-function showOverlay(isFirst){ document.getElementById("cardTitle").textContent=isFirst?"いろつなぎへようこそ":"あそびかた";
-  document.getElementById("goBtn").textContent=isFirst?"はじめる":"とじる"; document.getElementById("overlay").classList.add("show"); }
-function hideOverlay(){ document.getElementById("overlay").classList.remove("show"); store.tut=true; persist(); }
+/* オーバーレイ */
+function showHelp(){ document.getElementById("overlay").classList.add("show"); }
+function hideHelp(){ document.getElementById("overlay").classList.remove("show"); store.tut=true; persist(); }
+function showAdvHelp(){ document.getElementById("advOverlay").classList.add("show"); }
+function hideAdvHelp(){ document.getElementById("advOverlay").classList.remove("show"); store.tutAdv=true; persist(); }
 
-/* ===========================================================
-   ボタン
-   =========================================================== */
+/* モード切替 */
+function setMode(m){
+  mode=m; store.mode=m; persist();
+  document.getElementById("modeCasual").classList.toggle("on", m==="casual");
+  document.getElementById("modeAdv").classList.toggle("on", m==="advanced");
+  loadLevel(0);
+  if(m==="advanced" && !store.tutAdv) showAdvHelp();
+}
+
+/* ボタン */
 const D=(id,fn)=>document.getElementById(id).addEventListener("pointerdown",e=>{e.preventDefault();fn();});
 D("undoBtn",undo); D("resetPathBtn",resetPath); D("resetLevelBtn",resetLevel);
-D("helpBtn",()=>showOverlay(false)); D("goBtn",hideOverlay);
+D("helpBtn",showHelp); D("goBtn",hideHelp); D("advGoBtn",hideAdvHelp);
 D("retryBtn",()=>{ document.getElementById("clearBanner").classList.remove("show"); resetLevel(); });
-D("nextBtn",()=>{ if(levelIndex<LEVELS.length-1) loadLevel(levelIndex+1); });
+D("nextBtn",()=>{ if(levelIndex<curSet().length-1) loadLevel(levelIndex+1); });
+D("modeCasual",()=>setMode("casual")); D("modeAdv",()=>setMode("advanced"));
 
 /* 起動 */
+document.getElementById("modeCasual").classList.toggle("on", mode==="casual");
+document.getElementById("modeAdv").classList.toggle("on", mode==="advanced");
 loadLevel(0);
-if(!store.tut) showOverlay(true);
+if(!store.tut) showHelp();
+else if(mode==="advanced" && !store.tutAdv) showAdvHelp();
 </script>
 </body>
 </html>
