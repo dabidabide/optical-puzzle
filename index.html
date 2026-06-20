@@ -218,8 +218,6 @@
         <div class="step"><div class="num g">色</div><div class="tx"><b>色の強さ</b><br>面によって色ごとに強さが違います(色の下の<b>×1.0/×1.3</b>…)。弱い色ほど距離コスト増。遠い線は強い色で。</div></div>
         <div class="step"><div class="num g">継</div><div class="tx"><b>リレー点(<span style="color:var(--ok)">緑の◇</span>)</b><br>通ると「とどく力」が回復。区間ごとに予算判定なので、遠くへはリレーを挟んで届かせます。</div></div>
         <div class="step"><div class="num g">守</div><div class="tx"><b>予備の道(保護)</b><br>「<b>本線</b>」と「<b>予備</b>(破線)」の2本を引きます。予備は本線と<b>管を共有しない別の道</b>に。両方つながって初めてOK。</div></div>
-        <div class="step"><div class="num g">♊</div><div class="tx"><b>偏波多重</b><br>面によっては<b>同じ色を1つの管に2本まで</b>同居できます(色えらびの下に表示)。少ない色で多くさばけます。</div></div>
-        <div class="step"><div class="num g">偽</div><div class="tx"><b>偽の色</b><br>相性の悪い<b>色の組合せ</b>は同じ管に同居できません(色えらびの下に表示)。その組合せを避けて色を決めましょう。</div></div>
       </div>
       <button class="go" id="advGoBtn">やってみる</button>
     </div>
@@ -334,15 +332,7 @@ const ADVANCED = [
   { id:"a11", name:"そうりょく", advanced:true, cong:1, palette:PAL3, colStrength:[1,1.3,1.6],
     nodes:[{id:"S",x:40,y:160},{id:"U",x:185,y:70},{id:"D",x:185,y:250},{id:"R",x:325,y:160,relay:true},{id:"C",x:470,y:70},{id:"E",x:470,y:250},{id:"T",x:610,y:160}],
     fibers:[{id:"f1",a:"S",b:"U"},{id:"f2",a:"S",b:"D"},{id:"f3",a:"U",b:"R"},{id:"f4",a:"D",b:"R"},{id:"f5",a:"R",b:"C"},{id:"f6",a:"R",b:"E"},{id:"f7",a:"C",b:"T"},{id:"f8",a:"E",b:"T"},{id:"f9",a:"U",b:"C"},{id:"f10",a:"D",b:"E"}],
-    demands:[{id:"d1",src:"S",dst:"T",budget:29,protect:true},{id:"d2",src:"S",dst:"T",speed:2,budget:30},{id:"d3",src:"U",dst:"E",budget:18}] },
-  { id:"a12", name:"へんぱ", advanced:true, cong:0, palette:PAL2, polarCap:2,
-    nodes:[{id:"S",x:40,y:160},{id:"M",x:230,y:160},{id:"T",x:420,y:160}],
-    fibers:[{id:"f1",a:"S",b:"M"},{id:"f2",a:"M",b:"T"}],
-    demands:[{id:"d1",src:"S",dst:"T",budget:20},{id:"d2",src:"S",dst:"T",budget:20},{id:"d3",src:"S",dst:"T",budget:20},{id:"d4",src:"S",dst:"T",budget:20}] },
-  { id:"a13", name:"にせのいろ", advanced:true, cong:0, palette:PAL4, fwmPairs:[[0,1]],
-    nodes:[{id:"P",x:60,y:55},{id:"Q",x:60,y:185},{id:"H",x:175,y:120},{id:"R",x:285,y:120}],
-    fibers:[{id:"f1",a:"P",b:"H"},{id:"f2",a:"Q",b:"H"},{id:"f3",a:"H",b:"R"}],
-    demands:[{id:"d1",src:"P",dst:"R",budget:30},{id:"d2",src:"Q",dst:"R",budget:30},{id:"d3",src:"P",dst:"Q",budget:30}] }
+    demands:[{id:"d1",src:"S",dst:"T",budget:29,protect:true},{id:"d2",src:"S",dst:"T",speed:2,budget:30},{id:"d3",src:"U",dst:"E",budget:18}] }
 ];
 
 const SETS = { casual:CASUAL, advanced:ADVANCED };
