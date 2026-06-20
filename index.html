@@ -213,6 +213,7 @@
         <div class="step"><div class="num g">速</div><div class="tx"><b>はやさ</b><br>速い線(» の数)ほど「とどく力」を多く使う=短い道が必要です。</div></div>
         <div class="step"><div class="num g">色</div><div class="tx"><b>色の強さ</b><br>面によって色ごとに強さが違います(色の下の<b>×1.0/×1.3</b>…)。弱い色ほど距離コスト増。遠い線は強い色で。</div></div>
         <div class="step"><div class="num g">継</div><div class="tx"><b>リレー点(<span style="color:var(--ok)">緑の◇</span>)</b><br>通ると「とどく力」が回復。区間ごとに予算判定なので、遠くへはリレーを挟んで届かせます。</div></div>
+        <div class="step"><div class="num g">守</div><div class="tx"><b>予備の道(保護)</b><br>「<b>本線</b>」と「<b>予備</b>(破線)」の2本を引きます。予備は本線と<b>管を共有しない別の道</b>に。両方つながって初めてOK。</div></div>
       </div>
       <button class="go" id="advGoBtn">やってみる</button>
     </div>
@@ -315,7 +316,15 @@ const ADVANCED = [
   { id:"a8", name:"リレー", advanced:true, cong:0, palette:PAL2,
     nodes:[{id:"S",x:40,y:160},{id:"M",x:250,y:70},{id:"R",x:250,y:250,relay:true},{id:"T",x:460,y:160}],
     fibers:[{id:"f1",a:"S",b:"M"},{id:"f2",a:"M",b:"T"},{id:"f3",a:"S",b:"R"},{id:"f4",a:"R",b:"T"}],
-    demands:[{id:"d1",src:"S",dst:"T",budget:14},{id:"d2",src:"S",dst:"T",budget:14}] }
+    demands:[{id:"d1",src:"S",dst:"T",budget:14},{id:"d2",src:"S",dst:"T",budget:14}] },
+  { id:"a9", name:"まもり", advanced:true, cong:0, palette:PAL3,
+    nodes:[{id:"S",x:40,y:170},{id:"U",x:200,y:60},{id:"M",x:200,y:170},{id:"D",x:200,y:290},{id:"T",x:360,y:170}],
+    fibers:[{id:"f1",a:"S",b:"U"},{id:"f2",a:"U",b:"T"},{id:"f3",a:"S",b:"M"},{id:"f4",a:"M",b:"T"},{id:"f5",a:"S",b:"D"},{id:"f6",a:"D",b:"T"}],
+    demands:[{id:"d1",src:"S",dst:"T",budget:24,protect:true},{id:"d2",src:"S",dst:"T",budget:24,protect:true}] },
+  { id:"a10", name:"にじゅう", advanced:true, cong:1, palette:PAL3,
+    nodes:[{id:"H0",x:250,y:60},{id:"H1",x:370,y:130},{id:"H2",x:370,y:270},{id:"H3",x:250,y:340},{id:"H4",x:130,y:270},{id:"H5",x:130,y:130}],
+    fibers:[{id:"f1",a:"H0",b:"H1"},{id:"f2",a:"H1",b:"H2"},{id:"f3",a:"H2",b:"H3"},{id:"f4",a:"H3",b:"H4"},{id:"f5",a:"H4",b:"H5"},{id:"f6",a:"H5",b:"H0"},{id:"f7",a:"H0",b:"H3"},{id:"f8",a:"H1",b:"H4"},{id:"f9",a:"H2",b:"H5"}],
+    demands:[{id:"d1",src:"H0",dst:"H3",budget:24,protect:true},{id:"d2",src:"H1",dst:"H4",budget:24,protect:true},{id:"d3",src:"H2",dst:"H5",budget:24,protect:true}] }
 ];
 
 const SETS = { casual:CASUAL, advanced:ADVANCED };
@@ -431,13 +440,33 @@ function costParts(did,fiberUsers){
 function budgetOf(did){ const b=demandById(did).budget; return (b==null)?Infinity:b; }
 function reachOK(did,a){ return !level.advanced || a.cost[did] <= budgetOf(did); }
 
-function demandDone(d,a){ return demandConnected(d) && colorsComplete(d) && reachOK(d.id,a) && !a.collidedDemands.has(d.id); }
+function mainOf(d){ return level.demands.find(x=>x.role==="main" && x.pairId===d.pairId); }
+function disjointOK(d){
+  if(d.role!=="bak") return true;
+  const m=mainOf(d); if(!m) return true;
+  if(solutions[m.id].pathNodes.length<2) return true; // 本線未完なら判定保留
+  const mf=new Set(pathFibers(solutions[m.id].pathNodes));
+  return pathFibers(solutions[d.id].pathNodes).every(fid=>!mf.has(fid));
+}
+function demandDone(d,a){ return demandConnected(d) && colorsComplete(d) && reachOK(d.id,a) && disjointOK(d) && !a.collidedDemands.has(d.id); }
 function isClear(a){ return level.demands.every(d=>demandDone(d,a)); }
 function usedColorCount(){ const s=new Set(); level.demands.forEach(d=>solutions[d.id].colors.forEach(c=>{ if(c!=null) s.add(c); })); return s.size; }
 
 /* レベル操作 */
+function expandDemands(raw){
+  // protect:true の依頼を 本線(main)+予備(bak) の2依頼へ展開。lineNoは元の通し番号。
+  const out=[];
+  raw.forEach((d,i)=>{
+    if(d.protect){
+      out.push(Object.assign({},d,{role:"main",pairId:d.id,lineNo:i}));
+      out.push(Object.assign({},d,{id:d.id+"_b",role:"bak",pairId:d.id,lineNo:i}));
+    }else out.push(Object.assign({},d,{lineNo:i}));
+  });
+  return out;
+}
 function loadLevel(idx){
   levelIndex=idx; level=JSON.parse(JSON.stringify(curSet()[idx]));
+  level.demands=expandDemands(level.demands);
   solutions={}; level.demands.forEach(d=>solutions[d.id]={pathNodes:[],colors:[]});
   const saved=store.saved[level.id];
   if(saved) level.demands.forEach(d=>{ if(saved[d.id]){
@@ -509,6 +538,7 @@ function render(){
       const seg=el("line",{x1:pa.x+ox,y1:pa.y+oy,x2:pb.x+ox,y2:pb.y+oy,stroke:col,
         "stroke-width":sel?5.5:4.5,"stroke-linecap":"round",opacity:colored?.97:.8});
       if(!colored) seg.setAttribute("stroke-dasharray","6 5");
+      else if(d.role==="bak") seg.setAttribute("stroke-dasharray","1.5 5"); // 予備路は破線
       svg.appendChild(seg);
     }});
 
@@ -584,7 +614,8 @@ function renderLines(a){
     const dot=document.createElement("div"); dot.className="dot"+(rc>1?" multi":"");
     dot.style.background=(s.colors[0]!=null)?level.palette[s.colors[0]]:"#3a424f"; chip.appendChild(dot);
     const info=document.createElement("div"); info.className="info";
-    const nm=document.createElement("div"); nm.className="nm"; nm.innerHTML="線"+LINE_LABELS[i]+"  "+d.src+" → "+d.dst;
+    const roleTag = d.role==="main" ? " <span class='badge'>本線</span>" : d.role==="bak" ? " <span class='badge'>予備</span>" : "";
+    const nm=document.createElement("div"); nm.className="nm"; nm.innerHTML="線"+LINE_LABELS[d.lineNo]+roleTag+"  "+d.src+" → "+d.dst;
     if(level.advanced && d.speed) nm.innerHTML+="<span class='badge'>はやさ "+speedMark(d.speed)+" ×"+ADV.SPEEDF[d.speed].toFixed(2)+"</span>";
     info.appendChild(nm);
     const sub=document.createElement("div"); sub.className="sub"; sub.textContent=s.pathNodes.length>1?s.pathNodes.join(" - "):"道はまだ"; info.appendChild(sub);
@@ -601,8 +632,9 @@ function renderLines(a){
     chip.appendChild(info);
     const stat=document.createElement("div"); const conn=demandConnected(d), coll=a.collidedDemands.has(d.id), reach=reachOK(d.id,a);
     if(coll){ stat.className="stat warn"; stat.textContent="⚠ ぶつかり"; }
+    else if(conn&&d.role==="bak"&&!disjointOK(d)){ stat.className="stat warn"; stat.textContent="⚠ 本線と重複"; }
     else if(conn&&!reach){ stat.className="stat warn"; stat.textContent="⚠ 届かない"; }
-    else if(conn&&colorsComplete(d)){ stat.className="stat ok"; stat.textContent="✓ OK"; }
+    else if(conn&&colorsComplete(d)&&disjointOK(d)){ stat.className="stat ok"; stat.textContent="✓ OK"; }
     else { stat.className="stat idle"; stat.textContent="…とちゅう"; }
     chip.appendChild(stat); w.appendChild(chip);
   });
@@ -626,13 +658,16 @@ function updateGuide(a){
   if(cleared){ g.className="guide ok"; ic="🎉"; msg="クリア！ つぎの面へ進めるよ"; }
   else if(a.collidedDemands.size>0){ g.className="guide warn"; ic="⚠️"; msg="同じ色がぶつかってるよ。色か道を変えてみよう"; }
   else {
+    const overlap=level.demands.find(d=>d.role==="bak"&&demandConnected(d)&&!disjointOK(d));
     const notReach=level.demands.find(d=>demandConnected(d)&&colorsComplete(d)&&!reachOK(d.id,a));
-    if(notReach){ g.className="guide warn"; ic="⚠️"; msg="線"+LINE_LABELS[level.demands.indexOf(notReach)]+"が とどいていない。短い道か、空いている道にしてみよう"; }
+    if(overlap){ g.className="guide warn"; ic="⚠️"; msg="線"+LINE_LABELS[overlap.lineNo]+"の予備が本線と重なってるよ。別の道(管を共有しない)にしよう"; }
+    else if(notReach){ g.className="guide warn"; ic="⚠️"; msg="線"+LINE_LABELS[notReach.lineNo]+(notReach.role?("の"+(notReach.role==="bak"?"予備":"本線")):"")+"が とどいていない。短い道や空いてる道に"; }
     else {
-      const d=demandById(selDemandId), s=solutions[selDemandId], lbl=LINE_LABELS[level.demands.indexOf(d)];
-      if(!demandConnected(d)) msg="線"+lbl+"をえらび中。点をタップして "+d.src+" → "+d.dst+" の道をつくろう";
-      else if(!colorsComplete(d)) msg=(runCount(d.id)>1)?("線"+lbl+"の道ができた！ 区間ごとに色をえらんでね"):("線"+lbl+"の道ができた！ 上の色をえらんでね");
-      else { const rest=level.demands.filter(x=>!demandDone(x,a)).length; msg = rest>0 ? ("いいね！ 残りの線もつなごう(あと"+rest+"本)") : "あと少し！"; }
+      const d=demandById(selDemandId), s=solutions[selDemandId], lbl=LINE_LABELS[d.lineNo];
+      const rn=d.role==="bak"?"予備":d.role==="main"?"本線":"";
+      if(!demandConnected(d)) msg="線"+lbl+rn+"をえらび中。点をタップして "+d.src+" → "+d.dst+" の道をつくろう";
+      else if(!colorsComplete(d)) msg=(runCount(d.id)>1)?("線"+lbl+"の道ができた！ 区間ごとに色をえらんでね"):("線"+lbl+rn+"の道ができた！ 上の色をえらんでね");
+      else { const rest=level.demands.filter(x=>!demandDone(x,a)).length; msg = rest>0 ? ("いいね！ 残りもつなごう(あと"+rest+"本)") : "あと少し！"; }
     }
   }
   g.innerHTML=""; const si=document.createElement("span"); si.className="ic"; si.textContent=ic;
