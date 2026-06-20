@@ -45,6 +45,9 @@
     dominant-baseline:central;pointer-events:none;}
   .node-hit{fill:transparent;cursor:pointer;}
   .conv-ring{fill:none;stroke:var(--conv);stroke-width:2;stroke-dasharray:3 3;}
+  .relay-ring{fill:none;stroke:var(--ok);stroke-width:2.5;stroke-dasharray:5 3;}
+  .swatch-wrap{display:flex;flex-direction:column;align-items:center;gap:2px;}
+  .swatch-str{font-size:10px;color:var(--muted);}
   .pipe-label{fill:#9aa6b4;font-size:9px;text-anchor:middle;dominant-baseline:central;
     pointer-events:none;paint-order:stroke;stroke:#0d1117;stroke-width:2.5px;font-weight:600;}
   .pipe-label.cong{fill:var(--conv);font-weight:800;}
@@ -208,6 +211,8 @@
         <div class="step"><div class="num g">混</div><div class="tx"><b>混雑</b><br>同じ管をたくさんの線が通ると弱ります。共有された管は<span style="color:var(--conv)">オレンジで太く「×本数」</span>表示。詰めすぎ注意。</div></div>
         <div class="step"><div class="num g">◇</div><div class="tx"><b>色がえ中継点</b><br>オレンジの◇の点を通ると、線の色を<b>途中で変えられます</b>。区間ごとに色をえらべます。</div></div>
         <div class="step"><div class="num g">速</div><div class="tx"><b>はやさ</b><br>速い線(» の数)ほど「とどく力」を多く使う=短い道が必要です。</div></div>
+        <div class="step"><div class="num g">色</div><div class="tx"><b>色の強さ</b><br>面によって色ごとに強さが違います(色の下の<b>×1.0/×1.3</b>…)。弱い色ほど距離コスト増。遠い線は強い色で。</div></div>
+        <div class="step"><div class="num g">継</div><div class="tx"><b>リレー点(<span style="color:var(--ok)">緑の◇</span>)</b><br>通ると「とどく力」が回復。区間ごとに予算判定なので、遠くへはリレーを挟んで届かせます。</div></div>
       </div>
       <button class="go" id="advGoBtn">やってみる</button>
     </div>
@@ -302,7 +307,15 @@ const ADVANCED = [
   { id:"a6", name:"おおぞら", advanced:true, cong:1, palette:PAL2,
     nodes:[{id:"L0",x:50,y:80},{id:"L1",x:50,y:260},{id:"A",x:185,y:170},{id:"PT",x:315,y:70},{id:"PB",x:315,y:270},{id:"B",x:445,y:170},{id:"R0",x:585,y:80},{id:"R1",x:585,y:260}],
     fibers:[{id:"f1",a:"L0",b:"A"},{id:"f2",a:"L1",b:"A"},{id:"f3",a:"A",b:"PT"},{id:"f4",a:"PT",b:"B"},{id:"f5",a:"A",b:"PB"},{id:"f6",a:"PB",b:"B"},{id:"f7",a:"B",b:"R0"},{id:"f8",a:"B",b:"R1"}],
-    demands:[{id:"d1",src:"L0",dst:"R1",speed:2,budget:50},{id:"d2",src:"L1",dst:"R0",speed:1,budget:40},{id:"d3",src:"L0",dst:"R0",speed:1,budget:40},{id:"d4",src:"L1",dst:"R1",speed:1,budget:40}] }
+    demands:[{id:"d1",src:"L0",dst:"R1",speed:2,budget:50},{id:"d2",src:"L1",dst:"R0",speed:1,budget:40},{id:"d3",src:"L0",dst:"R0",speed:1,budget:40},{id:"d4",src:"L1",dst:"R1",speed:1,budget:40}] },
+  { id:"a7", name:"いろのちから", advanced:true, cong:0, palette:PAL3, colStrength:[1,1.3,1.6],
+    nodes:[{id:"S",x:40,y:160},{id:"A",x:150,y:90},{id:"B",x:150,y:300},{id:"M",x:330,y:160},{id:"T",x:470,y:160}],
+    fibers:[{id:"f1",a:"S",b:"A"},{id:"f2",a:"A",b:"M"},{id:"f3",a:"S",b:"B"},{id:"f4",a:"B",b:"M"},{id:"f5",a:"M",b:"T"}],
+    demands:[{id:"d1",src:"S",dst:"T",budget:36},{id:"d2",src:"S",dst:"T",budget:36},{id:"d3",src:"S",dst:"T",budget:36}] },
+  { id:"a8", name:"リレー", advanced:true, cong:0, palette:PAL2,
+    nodes:[{id:"S",x:40,y:160},{id:"M",x:250,y:70},{id:"R",x:250,y:250,relay:true},{id:"T",x:460,y:160}],
+    fibers:[{id:"f1",a:"S",b:"M"},{id:"f2",a:"M",b:"T"},{id:"f3",a:"S",b:"R"},{id:"f4",a:"R",b:"T"}],
+    demands:[{id:"d1",src:"S",dst:"T",budget:14},{id:"d2",src:"S",dst:"T",budget:14}] }
 ];
 
 const SETS = { casual:CASUAL, advanced:ADVANCED };
@@ -329,9 +342,21 @@ function curSet(){ return SETS[mode]; }
 function demandById(id){ return level.demands.find(d=>d.id===id); }
 function nodeById(id){ return level.nodes.find(n=>n.id===id); }
 function isConv(id){ const n=nodeById(id); return !!(n&&n.conv); }
+function isRelay(id){ const n=nodeById(id); return !!(n&&n.relay); }
 function fiberBetween(a,b){ return level.fibers.find(f=>(f.a===a&&f.b===b)||(f.a===b&&f.b===a))||null; }
+function fiberById(fid){ return level.fibers.find(f=>f.id===fid); }
 function pathFibers(nodes){ const o=[]; for(let i=0;i<nodes.length-1;i++){const f=fiberBetween(nodes[i],nodes[i+1]); if(f)o.push(f.id);} return o; }
 function pipeLen(a,b){ const na=nodeById(a),nb=nodeById(b); return Math.max(1,Math.round(Math.hypot(na.x-nb.x,na.y-nb.y)/ADV.SCALE)); }
+function pipeLenF(fid){ const f=fiberById(fid); return pipeLen(f.a,f.b); }
+/* リレー点で予算区間を分割 */
+function segmentsOf(nodes){
+  const segs=[[]];
+  for(let i=0;i<nodes.length-1;i++){
+    const f=fiberBetween(nodes[i],nodes[i+1]); if(f) segs[segs.length-1].push(f.id);
+    if(i<nodes.length-2 && isRelay(nodes[i+1])) segs.push([]);
+  }
+  return segs.filter(s=>s.length>0);
+}
 
 /* 区間(変換点で分割) */
 function runsOf(nodes){
@@ -384,14 +409,24 @@ function analyze(){
 }
 
 function costParts(did,fiberUsers){
+  // とどく力 = リレー区間ごとのコストの最大値(binding)。距離は色の強さで重み付け。
   const nodes=solutions[did].pathNodes;
   const sp=demandById(did).speed||1, f=ADV.SPEEDF[sp];
-  if(nodes.length<2) return {road:0,congCost:0,f:f,sp:sp,cost:0};
-  let base=0; for(let i=0;i<nodes.length-1;i++) base+=pipeLen(nodes[i],nodes[i+1]);
-  const hops=Math.max(0,nodes.length-2);
-  let cong=0; if(level.cong) pathFibers(nodes).forEach(fid=> cong += (fiberUsers[fid].length-1));
-  const road=base + ADV.HOP*hops, congCost=ADV.CONG*cong;
-  return {road:road, congCost:congCost, f:f, sp:sp, cost:Math.ceil((road+congCost)*f)};
+  if(nodes.length<2) return {road:0,congCost:0,f:f,sp:sp,cost:0,nSeg:0};
+  const cs=level.colStrength||null, congf=level.cong?ADV.CONG:0;
+  // 管→色(変換点で分割した区間の色)
+  const runs=runsOf(nodes), colors=solutions[did].colors, pcol={};
+  runs.forEach((r,ri)=>r.forEach(fid=>{ pcol[fid]=(colors[ri]==null?null:colors[ri]); }));
+  const segs=segmentsOf(nodes);
+  let best={cost:-1,road:0,congCost:0};
+  segs.forEach(seg=>{
+    let road=0, cong=0;
+    seg.forEach(fid=>{ const c=pcol[fid]; const st=(cs&&c!=null)?cs[c]:1; road+=pipeLenF(fid)*st; cong+=(fiberUsers[fid].length-1); });
+    road+=ADV.HOP*(seg.length-1);
+    const cc=congf*cong, sc=Math.ceil((road+cc)*f);
+    if(sc>best.cost) best={cost:sc, road:Math.round(road), congCost:cc};
+  });
+  return {road:best.road, congCost:best.congCost, f:f, sp:sp, cost:best.cost, nSeg:segs.length};
 }
 function budgetOf(did){ const b=demandById(did).budget; return (b==null)?Infinity:b; }
 function reachOK(did,a){ return !level.advanced || a.cost[did] <= budgetOf(did); }
@@ -480,6 +515,7 @@ function render(){
   const sd=demandById(selDemandId);
   level.nodes.forEach(n=>{
     if(n.conv) svg.appendChild(el("circle",{cx:n.x,cy:n.y,r:19,class:"conv-ring"}));
+    if(n.relay) svg.appendChild(el("circle",{cx:n.x,cy:n.y,r:19,class:"relay-ring"}));
     let cls="node";
     if(sd){ if(n.id===sd.src) cls="node src"; else if(n.id===sd.dst) cls="node dst"; }
     svg.appendChild(el("circle",{cx:n.x,cy:n.y,r:14,class:cls}));
@@ -526,10 +562,15 @@ function renderRunStrip(){
 function renderPalette(){
   const w=document.getElementById("palette"); w.innerHTML="";
   normalizeColors(selDemandId); const rc=runCount(selDemandId); if(selRun>=rc) selRun=rc-1;
-  const cur=solutions[selDemandId].colors[selRun];
-  level.palette.forEach((c,ci)=>{ const sw=document.createElement("div");
-    sw.className="swatch"+(cur===ci?" sel":""); sw.style.background=c;
-    sw.addEventListener("pointerdown",e=>{e.preventDefault(); setColor(ci);}); w.appendChild(sw); });
+  const cur=solutions[selDemandId].colors[selRun]; const cs=level.colStrength||null;
+  level.palette.forEach((c,ci)=>{
+    const wrap=document.createElement("div"); wrap.className="swatch-wrap";
+    const sw=document.createElement("div"); sw.className="swatch"+(cur===ci?" sel":""); sw.style.background=c;
+    sw.addEventListener("pointerdown",e=>{e.preventDefault(); setColor(ci);});
+    wrap.appendChild(sw);
+    if(cs){ const lab=document.createElement("div"); lab.className="swatch-str"; lab.textContent="×"+cs[ci].toFixed(1); wrap.appendChild(lab); }
+    w.appendChild(wrap);
+  });
 }
 
 function speedMark(sp){ return sp>=3?"»»»":sp===2?"»»":"»"; }
@@ -553,9 +594,9 @@ function renderLines(a){
       const sp=document.createElement("span"); sp.style.width=Math.min(100,Math.round(p.cost/bud*100))+"%"; g.appendChild(sp);
       info.appendChild(g);
       const gt=document.createElement("div"); gt.className="sub"; gt.style.color=over?"var(--warn)":"var(--muted)";
-      gt.textContent="とどく力 "+p.cost+" / "+bud+(over?"(届かない)":""); info.appendChild(gt);
+      gt.textContent="とどく力 "+p.cost+" / "+bud+(p.nSeg>1?"(最長区間)":"")+(over?" 届かない":""); info.appendChild(gt);
       const br=document.createElement("div"); br.className="sub";
-      br.textContent="= 道のり"+p.road+(level.cong?(" ＋ こみ"+p.congCost):"")+(p.f!==1?(" ×"+p.f):""); info.appendChild(br);
+      br.textContent=(p.nSeg>1?"最長区間 = ":"= ")+"道のり"+p.road+(level.cong?(" ＋ こみ"+p.congCost):"")+(p.f!==1?(" ×"+p.f):""); info.appendChild(br);
     }
     chip.appendChild(info);
     const stat=document.createElement("div"); const conn=demandConnected(d), coll=a.collidedDemands.has(d.id), reach=reachOK(d.id,a);
