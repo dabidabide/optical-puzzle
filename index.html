@@ -48,6 +48,9 @@
   .relay-ring{fill:none;stroke:var(--ok);stroke-width:2.5;stroke-dasharray:5 3;}
   .swatch-wrap{display:flex;flex-direction:column;align-items:center;gap:2px;}
   .swatch-str{font-size:10px;color:var(--muted);}
+  .rules{display:flex;flex-wrap:wrap;gap:10px 14px;margin:7px 2px 0;font-size:12px;color:var(--muted);align-items:center;}
+  .rules .combo{display:inline-flex;align-items:center;gap:3px;}
+  .rules .cdot{width:13px;height:13px;border-radius:50%;border:1px solid #0007;}
   .pipe-label{fill:#9aa6b4;font-size:9px;text-anchor:middle;dominant-baseline:central;
     pointer-events:none;paint-order:stroke;stroke:#0d1117;stroke-width:2.5px;font-weight:600;}
   .pipe-label.cong{fill:var(--conv);font-weight:800;}
@@ -164,6 +167,7 @@
   <div class="lbl" id="colorLbl">① 色をえらぶ</div>
   <div class="runstrip" id="runstrip"></div>
   <div class="palette" id="palette"></div>
+  <div class="rules" id="rules"></div>
 
   <div class="lbl">② つなぐ線(タップでえらぶ)</div>
   <div class="lines" id="lines"></div>
@@ -214,6 +218,8 @@
         <div class="step"><div class="num g">色</div><div class="tx"><b>色の強さ</b><br>面によって色ごとに強さが違います(色の下の<b>×1.0/×1.3</b>…)。弱い色ほど距離コスト増。遠い線は強い色で。</div></div>
         <div class="step"><div class="num g">継</div><div class="tx"><b>リレー点(<span style="color:var(--ok)">緑の◇</span>)</b><br>通ると「とどく力」が回復。区間ごとに予算判定なので、遠くへはリレーを挟んで届かせます。</div></div>
         <div class="step"><div class="num g">守</div><div class="tx"><b>予備の道(保護)</b><br>「<b>本線</b>」と「<b>予備</b>(破線)」の2本を引きます。予備は本線と<b>管を共有しない別の道</b>に。両方つながって初めてOK。</div></div>
+        <div class="step"><div class="num g">♊</div><div class="tx"><b>偏波多重</b><br>面によっては<b>同じ色を1つの管に2本まで</b>同居できます(色えらびの下に表示)。少ない色で多くさばけます。</div></div>
+        <div class="step"><div class="num g">偽</div><div class="tx"><b>偽の色</b><br>相性の悪い<b>色の組合せ</b>は同じ管に同居できません(色えらびの下に表示)。その組合せを避けて色を決めましょう。</div></div>
       </div>
       <button class="go" id="advGoBtn">やってみる</button>
     </div>
@@ -328,7 +334,15 @@ const ADVANCED = [
   { id:"a11", name:"そうりょく", advanced:true, cong:1, palette:PAL3, colStrength:[1,1.3,1.6],
     nodes:[{id:"S",x:40,y:160},{id:"U",x:185,y:70},{id:"D",x:185,y:250},{id:"R",x:325,y:160,relay:true},{id:"C",x:470,y:70},{id:"E",x:470,y:250},{id:"T",x:610,y:160}],
     fibers:[{id:"f1",a:"S",b:"U"},{id:"f2",a:"S",b:"D"},{id:"f3",a:"U",b:"R"},{id:"f4",a:"D",b:"R"},{id:"f5",a:"R",b:"C"},{id:"f6",a:"R",b:"E"},{id:"f7",a:"C",b:"T"},{id:"f8",a:"E",b:"T"},{id:"f9",a:"U",b:"C"},{id:"f10",a:"D",b:"E"}],
-    demands:[{id:"d1",src:"S",dst:"T",budget:29,protect:true},{id:"d2",src:"S",dst:"T",speed:2,budget:30},{id:"d3",src:"U",dst:"E",budget:18}] }
+    demands:[{id:"d1",src:"S",dst:"T",budget:29,protect:true},{id:"d2",src:"S",dst:"T",speed:2,budget:30},{id:"d3",src:"U",dst:"E",budget:18}] },
+  { id:"a12", name:"へんぱ", advanced:true, cong:0, palette:PAL2, polarCap:2,
+    nodes:[{id:"S",x:40,y:160},{id:"M",x:230,y:160},{id:"T",x:420,y:160}],
+    fibers:[{id:"f1",a:"S",b:"M"},{id:"f2",a:"M",b:"T"}],
+    demands:[{id:"d1",src:"S",dst:"T",budget:20},{id:"d2",src:"S",dst:"T",budget:20},{id:"d3",src:"S",dst:"T",budget:20},{id:"d4",src:"S",dst:"T",budget:20}] },
+  { id:"a13", name:"にせのいろ", advanced:true, cong:0, palette:PAL4, fwmPairs:[[0,1]],
+    nodes:[{id:"P",x:60,y:55},{id:"Q",x:60,y:185},{id:"H",x:175,y:120},{id:"R",x:285,y:120}],
+    fibers:[{id:"f1",a:"P",b:"H"},{id:"f2",a:"Q",b:"H"},{id:"f3",a:"H",b:"R"}],
+    demands:[{id:"d1",src:"P",dst:"R",budget:30},{id:"d2",src:"Q",dst:"R",budget:30},{id:"d3",src:"P",dst:"Q",budget:30}] }
 ];
 
 const SETS = { casual:CASUAL, advanced:ADVANCED };
@@ -411,10 +425,17 @@ function analyze(){
   level.demands.forEach(d=>pathFibers(solutions[d.id].pathNodes).forEach(fid=>{
     if(!fiberUsers[fid].includes(d.id)) fiberUsers[fid].push(d.id); }));
   const collidedFibers=new Set(), collidedDemands=new Set();
+  const cap=level.polarCap||1, fwm=(level.fwmPairs||[]).map(s=>new Set(s));
   level.fibers.forEach(f=>{
     const seen={};
     fiberUsers[f.id].forEach(did=>{ const c=colorOnPipe(did,f.id); if(c==null) return; (seen[c]=seen[c]||[]).push(did); });
-    Object.values(seen).forEach(list=>{ if(list.length>=2){ collidedFibers.add(f.id); list.forEach(d=>collidedDemands.add(d)); } });
+    // 偏波多重: 同色が容量(cap)を超えたら衝突
+    Object.keys(seen).forEach(c=>{ if(seen[c].length>cap){ collidedFibers.add(f.id); seen[c].forEach(d=>collidedDemands.add(d)); } });
+    // 偽の色: 禁止の色組合せが同管に揃ったら衝突
+    if(fwm.length){ const present=new Set(Object.keys(seen).map(Number));
+      fwm.forEach(s=>{ if(s.size>0){ let all=true; s.forEach(col=>{ if(!present.has(col)) all=false; });
+        if(all){ collidedFibers.add(f.id); fiberUsers[f.id].forEach(did=>{ const c=colorOnPipe(did,f.id); if(c!=null&&s.has(c)) collidedDemands.add(did); }); } } });
+    }
   });
   const cost={}, parts={};
   level.demands.forEach(d=>{ const p=costParts(d.id,fiberUsers); parts[d.id]=p; cost[d.id]=p.cost; });
@@ -566,7 +587,7 @@ function render(){
     t.textContent=pipeLen(f.a,f.b)+(busy?(" ×"+k):""); svg.appendChild(t);
   });
 
-  renderRunStrip(); renderPalette(); renderLines(a); renderLevelbar();
+  renderRunStrip(); renderPalette(); renderRules(); renderLines(a); renderLevelbar();
 
   const used=usedColorCount();
   document.getElementById("colorUse").textContent="つかった色: "+used+" / "+level.palette.length;
@@ -607,6 +628,17 @@ function renderPalette(){
   });
 }
 
+function renderRules(){
+  const w=document.getElementById("rules"); if(!w) return; w.innerHTML="";
+  if(level.polarCap>1){ const s=document.createElement("span"); s.textContent="♊ 同じ色は1つの管に"+level.polarCap+"本までOK(偏波多重)"; w.appendChild(s); }
+  if(level.fwmPairs && level.fwmPairs.length){
+    const lab=document.createElement("span"); lab.textContent="⚠ 同じ管に同居できない色:"; w.appendChild(lab);
+    level.fwmPairs.forEach(pair=>{ const c=document.createElement("span"); c.className="combo";
+      pair.forEach((ci,k)=>{ if(k>0){ const pl=document.createElement("span"); pl.textContent="＋"; c.appendChild(pl); }
+        const d=document.createElement("span"); d.className="cdot"; d.style.background=level.palette[ci]; c.appendChild(d); });
+      w.appendChild(c); });
+  }
+}
 function speedMark(sp){ return sp>=3?"»»»":sp===2?"»»":"»"; }
 
 function renderLines(a){
