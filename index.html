@@ -51,6 +51,23 @@
   .rules{display:flex;flex-wrap:wrap;gap:10px 14px;margin:7px 2px 0;font-size:12px;color:var(--muted);align-items:center;}
   .rules .combo{display:inline-flex;align-items:center;gap:3px;}
   .rules .cdot{width:13px;height:13px;border-radius:50%;border:1px solid #0007;}
+  .od-hud{display:flex;gap:14px;align-items:center;font-size:13px;color:var(--muted);margin:4px 2px 8px;}
+  .od-hud b{color:var(--text);font-size:16px;}
+  .od-hud #odPause{margin-left:auto;width:40px;height:34px;border:1px solid var(--line);background:var(--panel);color:var(--text);border-radius:8px;font-size:15px;}
+  .od-req{display:flex;align-items:center;gap:9px;padding:8px 10px;border:1px solid var(--line);background:var(--panel);border-radius:10px;}
+  .od-req.sel{border-color:var(--accent);background:var(--panel2);}
+  .od-req.active{opacity:.7;}
+  .od-req .dot{width:15px;height:15px;border-radius:50%;border:1px solid #0007;flex:0 0 auto;}
+  .od-req .info{flex:1;min-width:0;}
+  .od-req .nm{font-size:13.5px;font-weight:600;}
+  .od-gauge{height:6px;border-radius:3px;background:#243040;overflow:hidden;margin-top:5px;}
+  .od-gauge>span{display:block;height:100%;background:var(--ok);}
+  .od-gauge.warn>span{background:var(--warn);}
+  .od-req .tag{font-size:11px;flex:0 0 auto;}
+  #odsvg .od-node{fill:#222b38;stroke:#46506080;stroke-width:1.5;}
+  #odsvg .od-node.src{stroke:var(--accent);stroke-width:3;}
+  #odsvg .od-node.dst{stroke:#d2a8ff;stroke-width:3;}
+  #odsvg .od-lab{fill:#cdd6e0;font-size:11px;font-weight:700;text-anchor:middle;dominant-baseline:central;pointer-events:none;}
   .pipe-label{fill:#9aa6b4;font-size:9px;text-anchor:middle;dominant-baseline:central;
     pointer-events:none;paint-order:stroke;stroke:#0d1117;stroke-width:2.5px;font-weight:600;}
   .pipe-label.cong{fill:var(--conv);font-weight:800;}
@@ -145,8 +162,10 @@
   <div class="modebar">
     <button id="modeCasual" class="on">ふつう</button>
     <button id="modeAdv">上級 ✦</button>
+    <button id="modeOnd">オンデマンド ⏱</button>
   </div>
 
+  <div id="puzzleUI">
   <div class="levelbar" id="levelbar"></div>
 
   <div class="board">
@@ -184,6 +203,30 @@
 
   <div class="footrow">
     <button id="resetLevelBtn">この面を最初から</button>
+  </div>
+  </div><!-- /puzzleUI -->
+
+  <!-- オンデマンド・モード -->
+  <div id="ondemandUI" style="display:none">
+    <div class="od-hud">
+      <span>スコア <b id="odScore">0</b></span>
+      <span>のこり <b id="odTime">0</b>秒</span>
+      <span>ベスト <b id="odBest">0</b></span>
+      <button id="odPause">⏸</button>
+    </div>
+    <div class="board">
+      <svg id="odsvg" viewBox="0 0 640 400" preserveAspectRatio="xMidYMid meet"></svg>
+    </div>
+    <div class="guide" id="odGuide"><span class="ic">⏱</span><span id="odGuideText">「はじめる」で開始</span></div>
+    <div class="lbl">色(波長)をえらぶ</div>
+    <div class="palette" id="odPalette"></div>
+    <div class="controls">
+      <button id="odOpen">✓ 開通する</button>
+      <button id="odCancel">やめる</button>
+    </div>
+    <div class="lbl">申し込み(締切までに開通してね)</div>
+    <div class="lines" id="odReqs"></div>
+    <div class="footrow"><button id="odStart">▶ はじめる / もう一度</button></div>
   </div>
 
   <!-- 基本ヘルプ -->
@@ -722,14 +765,127 @@ function hideHelp(){ document.getElementById("overlay").classList.remove("show")
 function showAdvHelp(){ document.getElementById("advOverlay").classList.add("show"); }
 function hideAdvHelp(){ document.getElementById("advOverlay").classList.remove("show"); store.tutAdv=true; persist(); }
 
-/* モード切替 */
-function setMode(m){
-  mode=m; store.mode=m; persist();
-  document.getElementById("modeCasual").classList.toggle("on", m==="casual");
-  document.getElementById("modeAdv").classList.toggle("on", m==="advanced");
-  loadLevel(0);
-  if(m==="advanced" && !store.tutAdv) showAdvHelp();
+/* ===========================================================
+   オンデマンド・モード(リアルタイム v1: 申込→締切までに開通→利用→解約)
+   =========================================================== */
+const ODMAP = {
+  palette:["#e6194B","#4363d8","#f5a623","#3cb44b"], session:120,
+  nodes:[{id:"大宮",x:300,y:45},{id:"立川",x:75,y:150},{id:"新宿",x:255,y:165},
+         {id:"東京",x:435,y:155},{id:"千葉",x:600,y:140},{id:"渋谷",x:250,y:285},
+         {id:"品川",x:430,y:285},{id:"横浜",x:360,y:375}],
+  fibers:[["大宮","新宿"],["大宮","東京"],["立川","新宿"],["新宿","東京"],["新宿","渋谷"],
+          ["東京","千葉"],["東京","品川"],["渋谷","品川"],["渋谷","横浜"],["品川","横浜"],
+          ["品川","千葉"],["新宿","品川"]].map((p,i)=>({id:"of"+i,a:p[0],b:p[1]}))
+};
+const odsvg=document.getElementById("odsvg");
+let od=null, odTimer=null; const ODBEST_KEY="irotsunagi.od.best";
+function odLoadBest(){ try{ return parseInt(localStorage.getItem(ODBEST_KEY))||0; }catch(e){ return 0; } }
+function odSaveBest(v){ try{ localStorage.setItem(ODBEST_KEY,v); }catch(e){} }
+function odNode(id){ return ODMAP.nodes.find(n=>n.id===id); }
+function odFiber(a,b){ return ODMAP.fibers.find(f=>(f.a===a&&f.b===b)||(f.a===b&&f.b===a))||null; }
+function odPathFibers(p){ const o=[]; for(let i=0;i<p.length-1;i++){ const f=odFiber(p[i],p[i+1]); if(f)o.push(f.id);} return o; }
+function odReq(id){ return od.reqs.find(r=>r.id===id); }
+function odInit(){ od={ t:0, score:0, best:odLoadBest(), running:false, paused:false, reqs:[], sel:null, nextId:1, spawnAt:1.2 }; }
+function odSpawn(){ const ns=ODMAP.nodes; let a=ns[Math.floor(Math.random()*ns.length)].id, b;
+  do{ b=ns[Math.floor(Math.random()*ns.length)].id; }while(b===a);
+  od.reqs.push({ id:od.nextId++, src:a, dst:b, born:od.t, grace:12+Math.random()*8, deadline:0, state:"pending", path:[a], color:null, reward:100, life:18+Math.random()*18 });
+  const r=od.reqs[od.reqs.length-1]; r.deadline=r.born+r.grace; }
+function odSpawnInterval(t){ return Math.max(2.2, 6 - t/26); }
+function odOccupied(){ const occ={}; od.reqs.forEach(r=>{ if(r.state==="active") odPathFibers(r.path).forEach(fid=>{ (occ[fid]=occ[fid]||new Set()).add(r.color); }); }); return occ; }
+function odConnected(r){ if(r.path.length<2||r.path[0]!==r.src||r.path[r.path.length-1]!==r.dst) return false;
+  for(let i=0;i<r.path.length-1;i++) if(!odFiber(r.path[i],r.path[i+1])) return false; return true; }
+function odCandValid(r,occ){ if(!odConnected(r)||r.color==null) return false; occ=occ||odOccupied();
+  return odPathFibers(r.path).every(fid=>!(occ[fid]&&occ[fid].has(r.color))); }
+function setMsgOD(t){ const e=document.getElementById("odGuideText"); if(e) e.textContent=t; }
+
+function odStart(){ const best=od?od.best:odLoadBest(); odInit(); od.best=best; od.running=true; od.paused=false;
+  document.getElementById("odPause").textContent="⏸";
+  if(odTimer) clearInterval(odTimer); odTimer=setInterval(odTick,100);
+  setMsgOD("申込をタップ→都市を順にタップで経路→色をえらんで「開通する」"); odRender(); }
+function odEnd(){ od.running=false; if(odTimer){ clearInterval(odTimer); odTimer=null; }
+  if(od.score>od.best){ od.best=od.score; odSaveBest(od.score); }
+  setMsgOD("⏱ 終了！ スコア "+od.score+" / ベスト "+od.best+" — 「はじめる」で再挑戦"); odRender(); }
+function odTogglePause(){ if(!od||!od.running) return; od.paused=!od.paused; document.getElementById("odPause").textContent=od.paused?"▶":"⏸"; }
+function odTick(){ if(!od.running||od.paused) return; od.t+=0.1;
+  if(od.t>=od.spawnAt){ odSpawn(); od.spawnAt=od.t+odSpawnInterval(od.t); }
+  od.reqs.forEach(r=>{ if(r.state==="pending" && od.t>=r.deadline){ r.state="lost"; od.score=Math.max(0,od.score-50); if(od.sel===r.id) od.sel=null; } });
+  od.reqs.forEach(r=>{ if(r.state==="active" && od.t>=r.releaseAt){ r.state="done"; } });
+  od.reqs=od.reqs.filter(r=> r.state==="pending"||r.state==="active");
+  if(od.t>=ODMAP.session){ odEnd(); return; } odRender(); }
+
+function odSelect(id){ const r=odReq(id); if(!r||r.state!=="pending") return; od.sel=id; if(r.path.length===0)r.path=[r.src]; odRender(); }
+function odNodeTap(nodeId){ if(od.sel==null) return; const r=odReq(od.sel); if(!r||r.state!=="pending") return;
+  if(r.path.length===0)r.path=[r.src]; const last=r.path[r.path.length-1];
+  if(nodeId===last) return;
+  if(r.path.length>=2 && nodeId===r.path[r.path.length-2]){ r.path.pop(); odRender(); return; }
+  if(r.path.includes(nodeId)) return;
+  if(!odFiber(last,nodeId)) return;
+  r.path.push(nodeId); odRender(); }
+function odSetColor(ci){ if(od.sel==null) return; const r=odReq(od.sel); if(r&&r.state==="pending"){ r.color=ci; odRender(); } }
+function odOpen(){ if(od.sel==null){ setMsgOD("先に申込をえらんでね"); return; } const r=odReq(od.sel); if(!r) return;
+  if(!odCandValid(r)){ setMsgOD("まだ開通できません(経路が未完 / その色は空いていない)"); return; }
+  r.state="active"; r.openAt=od.t; r.releaseAt=od.t+r.life; od.score+=r.reward; od.sel=null; setMsgOD("開通！ +"+r.reward); odRender(); }
+function odCancel(){ if(od.sel==null) return; const r=odReq(od.sel); if(r){ r.path=[r.src]; r.color=null; } od.sel=null; odRender(); }
+
+function odRender(){
+  if(!od) return;
+  document.getElementById("odScore").textContent=od.score;
+  document.getElementById("odTime").textContent=Math.max(0,Math.ceil(ODMAP.session-od.t));
+  document.getElementById("odBest").textContent=Math.max(od.best,od.score);
+  while(odsvg.firstChild) odsvg.removeChild(odsvg.firstChild);
+  const occ=odOccupied(), selR=od.sel!=null?odReq(od.sel):null, badF=new Set();
+  if(selR&&selR.color!=null) odPathFibers(selR.path).forEach(fid=>{ if(occ[fid]&&occ[fid].has(selR.color)) badF.add(fid); });
+  ODMAP.fibers.forEach(f=>{ const pa=odNode(f.a),pb=odNode(f.b);
+    odsvg.appendChild(el("line",{x1:pa.x,y1:pa.y,x2:pb.x,y2:pb.y,stroke:"#3a424f","stroke-width":8,"stroke-linecap":"round"})); });
+  badF.forEach(fid=>{ const f=ODMAP.fibers.find(x=>x.id===fid),pa=odNode(f.a),pb=odNode(f.b);
+    odsvg.appendChild(el("line",{x1:pa.x,y1:pa.y,x2:pb.x,y2:pb.y,stroke:"#ff6b63","stroke-width":14,"stroke-linecap":"round",opacity:.4})); });
+  const SP=6, fu={};
+  od.reqs.forEach(r=>{ if(r.state==="active") odPathFibers(r.path).forEach(fid=>{ (fu[fid]=fu[fid]||[]).push(r.id); }); });
+  const drawPath=(path,color,users,me,dashed)=>{ for(let i=0;i<path.length-1;i++){ const pa=odNode(path[i]),pb=odNode(path[i+1]),f=odFiber(path[i],path[i+1]); if(!f)continue;
+    const u=users[f.id]||[], k=u.length||1, idx=Math.max(0,u.indexOf(me)), off=(idx-(k-1)/2)*SP;
+    let dx=pb.x-pa.x,dy=pb.y-pa.y; const L=Math.hypot(dx,dy)||1; dx/=L;dy/=L; const ox=-dy*off,oy=dx*off;
+    const seg=el("line",{x1:pa.x+ox,y1:pa.y+oy,x2:pb.x+ox,y2:pb.y+oy,stroke:color,"stroke-width":5,"stroke-linecap":"round",opacity:.95});
+    if(dashed) seg.setAttribute("stroke-dasharray","2 5"); odsvg.appendChild(seg); } };
+  od.reqs.forEach(r=>{ if(r.state==="active") drawPath(r.path,ODMAP.palette[r.color],fu,r.id,false); });
+  if(selR&&selR.path.length>=2) drawPath(selR.path, selR.color!=null?ODMAP.palette[selR.color]:"#9aa6b4", {}, selR.id, selR.color==null);
+  ODMAP.nodes.forEach(n=>{ let cls="od-node"; if(selR){ if(n.id===selR.src)cls="od-node src"; else if(n.id===selR.dst)cls="od-node dst"; }
+    odsvg.appendChild(el("circle",{cx:n.x,cy:n.y,r:16,class:cls}));
+    const t=el("text",{x:n.x,y:n.y,class:"od-lab"}); t.textContent=n.id; odsvg.appendChild(t);
+    const hit=el("circle",{cx:n.x,cy:n.y,r:25,fill:"transparent"}); hit.style.cursor="pointer";
+    hit.addEventListener("pointerdown",ev=>{ev.preventDefault(); odNodeTap(n.id);}); odsvg.appendChild(hit); });
+  // パレット
+  const pw=document.getElementById("odPalette"); pw.innerHTML="";
+  const cur=selR?selR.color:null;
+  ODMAP.palette.forEach((c,ci)=>{ const sw=document.createElement("div"); sw.className="swatch"+(cur===ci?" sel":""); sw.style.background=c;
+    sw.addEventListener("pointerdown",e=>{e.preventDefault(); odSetColor(ci);}); pw.appendChild(sw); });
+  // 申込リスト
+  const w=document.getElementById("odReqs"); w.innerHTML="";
+  od.reqs.slice().sort((a,b)=>{ if(a.state!==b.state) return a.state==="pending"?-1:1; return (a.deadline||0)-(b.deadline||0); })
+    .forEach(r=>{ const chip=document.createElement("div"); chip.className="od-req"+(r.id===od.sel?" sel":"")+(r.state==="active"?" active":"");
+      if(r.state==="pending") chip.addEventListener("pointerdown",e=>{e.preventDefault(); odSelect(r.id);});
+      const dot=document.createElement("div"); dot.className="dot"; dot.style.background=r.color!=null?ODMAP.palette[r.color]:"#3a424f"; chip.appendChild(dot);
+      const info=document.createElement("div"); info.className="info";
+      const nm=document.createElement("div"); nm.className="nm"; nm.textContent=r.src+" → "+r.dst; info.appendChild(nm);
+      if(r.state==="pending"){ const left=r.deadline-od.t, frac=Math.max(0,Math.min(1,left/r.grace));
+        const g=document.createElement("div"); g.className="od-gauge"+(frac<0.34?" warn":""); const sp=document.createElement("span"); sp.style.width=(frac*100)+"%"; g.appendChild(sp); info.appendChild(g);
+        const sub=document.createElement("div"); sub.className="tag"; sub.style.color=frac<0.34?"var(--warn)":"var(--muted)"; sub.textContent="締切まで "+Math.ceil(Math.max(0,left))+"秒 ・ +"+r.reward; info.appendChild(sub);
+      } else { const sub=document.createElement("div"); sub.className="tag"; sub.style.color="var(--ok)"; sub.textContent="● 利用中(あと "+Math.max(0,Math.ceil(r.releaseAt-od.t))+"秒)"; info.appendChild(sub); }
+      chip.appendChild(info); w.appendChild(chip); });
 }
+
+/* モード切替(パズル ⇄ オンデマンド) */
+let appMode="puzzle";
+function setAppMode(m){ appMode=m;
+  document.getElementById("puzzleUI").style.display=m==="puzzle"?"":"none";
+  document.getElementById("ondemandUI").style.display=m==="ondemand"?"":"none";
+  document.getElementById("modeCasual").classList.toggle("on", m==="puzzle"&&mode==="casual");
+  document.getElementById("modeAdv").classList.toggle("on", m==="puzzle"&&mode==="advanced");
+  document.getElementById("modeOnd").classList.toggle("on", m==="ondemand");
+  if(m!=="ondemand" && odTimer){ clearInterval(odTimer); odTimer=null; if(od) od.running=false; }
+}
+function setMode(m){ mode=m; store.mode=m; persist(); setAppMode("puzzle"); loadLevel(0);
+  if(m==="advanced" && !store.tutAdv) showAdvHelp(); }
+function enterOndemand(){ setAppMode("ondemand"); if(!od) odInit(); setMsgOD("「はじめる」で開始(120秒で何件さばける?)"); odRender(); }
 
 /* ボタン */
 const D=(id,fn)=>document.getElementById(id).addEventListener("pointerdown",e=>{e.preventDefault();fn();});
@@ -737,11 +893,11 @@ D("undoBtn",undo); D("resetPathBtn",resetPath); D("resetLevelBtn",resetLevel);
 D("helpBtn",showHelp); D("goBtn",hideHelp); D("advGoBtn",hideAdvHelp);
 D("retryBtn",()=>{ document.getElementById("clearBanner").classList.remove("show"); resetLevel(); });
 D("nextBtn",()=>{ if(levelIndex<curSet().length-1) loadLevel(levelIndex+1); });
-D("modeCasual",()=>setMode("casual")); D("modeAdv",()=>setMode("advanced"));
+D("modeCasual",()=>setMode("casual")); D("modeAdv",()=>setMode("advanced")); D("modeOnd",enterOndemand);
+D("odStart",odStart); D("odOpen",odOpen); D("odCancel",odCancel); D("odPause",odTogglePause);
 
 /* 起動 */
-document.getElementById("modeCasual").classList.toggle("on", mode==="casual");
-document.getElementById("modeAdv").classList.toggle("on", mode==="advanced");
+setAppMode("puzzle");
 loadLevel(0);
 if(!store.tut) showHelp();
 else if(mode==="advanced" && !store.tutAdv) showAdvHelp();
