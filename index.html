@@ -785,12 +785,20 @@ function odNode(id){ return ODMAP.nodes.find(n=>n.id===id); }
 function odFiber(a,b){ return ODMAP.fibers.find(f=>(f.a===a&&f.b===b)||(f.a===b&&f.b===a))||null; }
 function odPathFibers(p){ const o=[]; for(let i=0;i<p.length-1;i++){ const f=odFiber(p[i],p[i+1]); if(f)o.push(f.id);} return o; }
 function odReq(id){ return od.reqs.find(r=>r.id===id); }
-function odInit(){ od={ t:0, score:0, best:odLoadBest(), running:false, paused:false, reqs:[], sel:null, nextId:1, spawnAt:1.2 }; }
+function odInit(){ od={ t:0, score:0, best:odLoadBest(), running:false, paused:false, reqs:[], sel:null, nextId:1, spawnAt:2.5 }; }
 function odSpawn(){ const ns=ODMAP.nodes; let a=ns[Math.floor(Math.random()*ns.length)].id, b;
   do{ b=ns[Math.floor(Math.random()*ns.length)].id; }while(b===a);
-  od.reqs.push({ id:od.nextId++, src:a, dst:b, born:od.t, grace:12+Math.random()*8, deadline:0, state:"pending", path:[a], color:null, reward:100, life:18+Math.random()*18 });
+  od.reqs.push({ id:od.nextId++, src:a, dst:b, born:od.t, grace:16+Math.random()*10, deadline:0, state:"pending", kind:"new", path:[a], color:null, reward:100 });
   const r=od.reqs[od.reqs.length-1]; r.deadline=r.born+r.grace; }
-function odSpawnInterval(t){ return Math.max(2.2, 6 - t/26); }
+function odSpawnInterval(t){ return Math.max(3.6, 5.5 - t/40); }
+function odPendingCount(){ return od.reqs.filter(r=>r.state==="pending").length; }
+/* 利用中の客に時々おきる変化: 解約 / 接続先切替 / 増速(もう1本) */
+function odFireEvent(r){ const roll=Math.random();
+  if(roll<0.45){ r.state="done"; setMsgOD("🔓 解約: "+r.src+"→"+r.dst+" の波長が空きました"); }
+  else if(roll<0.75){ const ns=ODMAP.nodes; let nd; do{ nd=ns[Math.floor(Math.random()*ns.length)].id; }while(nd===r.src||nd===r.dst);
+    setMsgOD("🔀 切替依頼: "+r.src+"→"+r.dst+" を "+nd+" 行きへ変更"); r.dst=nd; r.state="pending"; r.kind="switch"; r.reward=80; r.path=[r.src]; r.color=null; r.born=od.t; r.grace=15+Math.random()*8; r.deadline=od.t+r.grace; if(od.sel===r.id) od.sel=null; }
+  else { setMsgOD("⚡ 増速依頼: "+r.src+"→"+r.dst+" にもう1本"); od.reqs.push({ id:od.nextId++, src:r.src, dst:r.dst, born:od.t, grace:15+Math.random()*8, deadline:od.t+15, state:"pending", kind:"upgrade", path:[r.src], color:null, reward:80 });
+    const nr=od.reqs[od.reqs.length-1]; nr.deadline=nr.born+nr.grace; r.eventAt=od.t+(12+Math.random()*8); } }
 function odOccupied(){ const occ={}; od.reqs.forEach(r=>{ if(r.state==="active") odPathFibers(r.path).forEach(fid=>{ (occ[fid]=occ[fid]||new Set()).add(r.color); }); }); return occ; }
 function odConnected(r){ if(r.path.length<2||r.path[0]!==r.src||r.path[r.path.length-1]!==r.dst) return false;
   for(let i=0;i<r.path.length-1;i++) if(!odFiber(r.path[i],r.path[i+1])) return false; return true; }
@@ -807,9 +815,9 @@ function odEnd(){ od.running=false; if(odTimer){ clearInterval(odTimer); odTimer
   setMsgOD("⏱ 終了！ スコア "+od.score+" / ベスト "+od.best+" — 「はじめる」で再挑戦"); odRender(); }
 function odTogglePause(){ if(!od||!od.running) return; od.paused=!od.paused; document.getElementById("odPause").textContent=od.paused?"▶":"⏸"; }
 function odTick(){ if(!od.running||od.paused) return; od.t+=0.1;
-  if(od.t>=od.spawnAt){ odSpawn(); od.spawnAt=od.t+odSpawnInterval(od.t); }
-  od.reqs.forEach(r=>{ if(r.state==="pending" && od.t>=r.deadline){ r.state="lost"; od.score=Math.max(0,od.score-50); if(od.sel===r.id) od.sel=null; } });
-  od.reqs.forEach(r=>{ if(r.state==="active" && od.t>=r.releaseAt){ r.state="done"; } });
+  if(od.t>=od.spawnAt){ if(odPendingCount()<7) odSpawn(); od.spawnAt=od.t+odSpawnInterval(od.t); }
+  od.reqs.forEach(r=>{ if(r.state==="pending" && od.t>=r.deadline){ r.state="lost"; od.score=Math.max(0,od.score-50); setMsgOD("⌛ 締切落ち: "+r.src+"→"+r.dst+" (-50)"); if(od.sel===r.id) od.sel=null; } });
+  od.reqs.forEach(r=>{ if(r.state==="active" && od.t>=r.eventAt){ odFireEvent(r); } });
   od.reqs=od.reqs.filter(r=> r.state==="pending"||r.state==="active");
   if(od.t>=ODMAP.session){ odEnd(); return; } odRender(); }
 
@@ -824,7 +832,7 @@ function odNodeTap(nodeId){ if(od.sel==null) return; const r=odReq(od.sel); if(!
 function odSetColor(ci){ if(od.sel==null) return; const r=odReq(od.sel); if(r&&r.state==="pending"){ r.color=ci; odRender(); } }
 function odOpen(){ if(od.sel==null){ setMsgOD("先に申込をえらんでね"); return; } const r=odReq(od.sel); if(!r) return;
   if(!odCandValid(r)){ setMsgOD("まだ開通できません(経路が未完 / その色は空いていない)"); return; }
-  r.state="active"; r.openAt=od.t; r.releaseAt=od.t+r.life; od.score+=r.reward; od.sel=null; setMsgOD("開通！ +"+r.reward); odRender(); }
+  r.state="active"; r.openAt=od.t; r.eventAt=od.t+(12+Math.random()*8); od.score+=r.reward; od.sel=null; setMsgOD("✓ 開通！ +"+r.reward); odRender(); }
 function odCancel(){ if(od.sel==null) return; const r=odReq(od.sel); if(r){ r.path=[r.src]; r.color=null; } od.sel=null; odRender(); }
 
 function odRender(){
@@ -860,16 +868,22 @@ function odRender(){
     sw.addEventListener("pointerdown",e=>{e.preventDefault(); odSetColor(ci);}); pw.appendChild(sw); });
   // 申込リスト
   const w=document.getElementById("odReqs"); w.innerHTML="";
-  od.reqs.slice().sort((a,b)=>{ if(a.state!==b.state) return a.state==="pending"?-1:1; return (a.deadline||0)-(b.deadline||0); })
+  const KIND={ "new":["新規","var(--accent)"], "switch":["🔀切替","var(--conv)"], "upgrade":["⚡増速","var(--gold)"] };
+  od.reqs.slice().sort((a,b)=>{ if(a.state!==b.state) return a.state==="pending"?-1:1; return (a.deadline||a.eventAt||0)-(b.deadline||b.eventAt||0); })
     .forEach(r=>{ const chip=document.createElement("div"); chip.className="od-req"+(r.id===od.sel?" sel":"")+(r.state==="active"?" active":"");
       if(r.state==="pending") chip.addEventListener("pointerdown",e=>{e.preventDefault(); odSelect(r.id);});
       const dot=document.createElement("div"); dot.className="dot"; dot.style.background=r.color!=null?ODMAP.palette[r.color]:"#3a424f"; chip.appendChild(dot);
       const info=document.createElement("div"); info.className="info";
-      const nm=document.createElement("div"); nm.className="nm"; nm.textContent=r.src+" → "+r.dst; info.appendChild(nm);
+      const nm=document.createElement("div"); nm.className="nm";
+      if(r.state==="pending"){ const k=KIND[r.kind]||KIND["new"]; nm.innerHTML="<span style='color:"+k[1]+";font-size:11px'>"+k[0]+"</span> "+r.src+" → "+r.dst; }
+      else nm.textContent=r.src+" → "+r.dst;
+      info.appendChild(nm);
       if(r.state==="pending"){ const left=r.deadline-od.t, frac=Math.max(0,Math.min(1,left/r.grace));
         const g=document.createElement("div"); g.className="od-gauge"+(frac<0.34?" warn":""); const sp=document.createElement("span"); sp.style.width=(frac*100)+"%"; g.appendChild(sp); info.appendChild(g);
         const sub=document.createElement("div"); sub.className="tag"; sub.style.color=frac<0.34?"var(--warn)":"var(--muted)"; sub.textContent="締切まで "+Math.ceil(Math.max(0,left))+"秒 ・ +"+r.reward; info.appendChild(sub);
-      } else { const sub=document.createElement("div"); sub.className="tag"; sub.style.color="var(--ok)"; sub.textContent="● 利用中(あと "+Math.max(0,Math.ceil(r.releaseAt-od.t))+"秒)"; info.appendChild(sub); }
+      } else { const left=Math.max(0,r.eventAt-od.t), frac=Math.max(0,Math.min(1,left/18)), soon=left<=5;
+        const g=document.createElement("div"); g.className="od-gauge"+(soon?" warn":""); const sp=document.createElement("span"); sp.style.width=(frac*100)+"%"; sp.style.background="var(--muted)"; g.appendChild(sp); info.appendChild(g);
+        const sub=document.createElement("div"); sub.className="tag"; sub.style.color=soon?"var(--warn)":"var(--ok)"; sub.textContent=(soon?"まもなく変化":"● 利用中")+" ・ 変化まで "+Math.ceil(left)+"秒"; info.appendChild(sub); }
       chip.appendChild(info); w.appendChild(chip); });
 }
 
